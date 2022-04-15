@@ -1,0 +1,9 @@
+pynput
+scipy>=1.5.4
+torch>=1.10.1
+tqdm
+sklearn
+ipdb
+matplotlib
+pyyaml
+rospkg
