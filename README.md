@@ -293,6 +293,17 @@ Here are pictures of the three experiment scenes with their ROS Rviz shown to th
 
 <img src="docs/exp_3.png" alt="drawing" width="500"/>
 
+## What Next?
+Now that you've finished the tutorial, you can
+extend this general framework for your own purposes.
+- Use your own dataset: synthetic or real human demonstrations
+- Experiment with other architectures
+- Learn more complex behavior under the object-centric paradigm 
+  - Trajectories more complex than repel/attract
+  - Dynamic motion: velocity, acceleration, etc.
+- Apply safety constraints to control (e.g. collision avoidance)
+
+
 ## Citation
 If you found this paper/repository useful, please cite:
 ```
