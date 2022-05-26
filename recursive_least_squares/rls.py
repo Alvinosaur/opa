@@ -77,7 +77,7 @@ def rls_example_1D():
     def fhat(x, theta): return theta ** 2 * x ** 2
     def f(x): return x ** 2
 
-    alpha = 0.3
+    alpha = 0.3  # learning rate
     lmbda = 0.1  # forgetting factor
     rls = RLS(lmbda=lmbda, alpha=alpha)
 
