@@ -17,10 +17,11 @@ import matplotlib.colors as mcolors
 
 import torch
 
-from train import perform_adaptation, DEVICE
+from train import perform_adaptation, perform_adaptation_rls, DEVICE
 from elastic_band import Object
 from data_params import Params
 from model import Policy, PolicyNetwork, pose_to_model_input, decode_ori
+from recursive_least_squares.rls import RLS
 
 
 def sigint_handler(signal, frame):
@@ -88,7 +89,8 @@ def draw(ax: plt.Axes, start_pose: np.ndarray, goal_pose: np.ndarray,
     # Draw agent
     cur_pose = pred_traj[0]
     cur_pos, cur_theta = cur_pose[:POS_DIM], cur_pose[-1]
-    ax.add_patch(plt.Circle(cur_pos, color=agent_color, radius=agent_radius, alpha=0.4, label="Agent"))
+    ax.add_patch(plt.Circle(cur_pos, color=agent_color,
+                 radius=agent_radius, alpha=0.4, label="Agent"))
     ax.plot(pred_traj[:, 0], pred_traj[:, 1], '-', color=agent_color,
             linewidth=2, alpha=1.0, label="Agent")
     if show_rot:
@@ -98,15 +100,18 @@ def draw(ax: plt.Axes, start_pose: np.ndarray, goal_pose: np.ndarray,
 
     # Draw goal
     goal_pos, goal_theta = goal_pose[:POS_DIM], goal_pose[-1]
-    ax.add_patch(plt.Circle(goal_pos, goal_radius, color=goal_color, alpha=0.4, label="Goal"))
+    ax.add_patch(plt.Circle(goal_pos, goal_radius,
+                 color=goal_color, alpha=0.4, label="Goal"))
     if show_rot:
-        draw_vec(pos=goal_pos, theta_rad=goal_theta, radius=goal_radius, color="black")
+        draw_vec(pos=goal_pos, theta_rad=goal_theta,
+                 radius=goal_radius, color="black")
 
     # Draw start
     # NOTE: start_radius is act distance to agent, but for viz, just use fixed radius
     # start_radius = np.linalg.norm(cur_pose[:POS_DIM] - expert_traj[0][:POS_DIM])
     start_radius = agent_radius
-    ax.add_patch(plt.Circle(start_pose[:POS_DIM], start_radius, color=start_color, alpha=0.4, label="Start"))
+    ax.add_patch(plt.Circle(
+        start_pose[:POS_DIM], start_radius, color=start_color, alpha=0.4, label="Start"))
     if show_rot:
         draw_vec(pos=start_pose[:POS_DIM], theta_rad=start_pose[-1], radius=start_radius,
                  color="black", alpha=0.6)
@@ -136,7 +141,8 @@ def draw(ax: plt.Axes, start_pose: np.ndarray, goal_pose: np.ndarray,
     # Optionally draw contributed position forces from objects/goal onto agent
     if object_forces is not None:
         # Normalize contributed obj forces onto agent as unit vectors and extract attention weights
-        object_forces = object_forces[0]  # Only visualize first timestep in rollout
+        # Only visualize first timestep in rollout
+        object_forces = object_forces[0]
         vec_mags = np.linalg.norm(object_forces, axis=-1, keepdims=True)
         object_forces /= vec_mags
         obj_weights = vec_mags / vec_mags.sum(0)[:, np.newaxis]
@@ -147,7 +153,8 @@ def draw(ax: plt.Axes, start_pose: np.ndarray, goal_pose: np.ndarray,
                 cur_pos,  # start
                 cur_pos + FORCE_VEC_SCALE * obj_force * obj_weight  # end
             ])
-            theta_rad = np.arctan2(vec[1, 1] - vec[0, 1], vec[1, 0] - vec[0, 0])
+            theta_rad = np.arctan2(
+                vec[1, 1] - vec[0, 1], vec[1, 0] - vec[0, 0])
             fake_radius = np.linalg.norm(vec[1] - vec[0])
 
             # Case on whether this is an object or goal
@@ -186,7 +193,7 @@ def draw(ax: plt.Axes, start_pose: np.ndarray, goal_pose: np.ndarray,
     plt.draw()
     if hold:
         plt.pause(2.0)  # Give enough time to plot before ipdb
-        ipdb.set_trace()
+        # ipdb.set_trace()
     else:
         plt.pause(DRAW_DURATION)
 
@@ -219,15 +226,19 @@ def viz_helper(policy: Policy, start: np.ndarray, goal: np.ndarray, goal_radius,
     # Start
     start_tensor = torch.from_numpy(
         pose_to_model_input(start[np.newaxis])).to(torch.float32).to(DEVICE)
-    agent_radius_tensor = torch.tensor([Params.agent_radius], device=DEVICE).view(1, 1)
-    start_objects = torch.cat([start_tensor, agent_radius_tensor], dim=-1).unsqueeze(1)
+    agent_radius_tensor = torch.tensor(
+        [Params.agent_radius], device=DEVICE).view(1, 1)
+    start_objects = torch.cat(
+        [start_tensor, agent_radius_tensor], dim=-1).unsqueeze(1)
 
     # Object
     object_poses_torch = torch.from_numpy(
         pose_to_model_input(object_poses)).to(torch.float32).to(DEVICE).unsqueeze(0)
-    object_radii_torch = torch.from_numpy(object_radii).to(torch.float32).to(DEVICE).view(1, -1, 1)
+    object_radii_torch = torch.from_numpy(object_radii).to(
+        torch.float32).to(DEVICE).view(1, -1, 1)
     objects_torch = torch.cat([object_poses_torch, object_radii_torch], dim=-1)
-    object_types_tensor = torch.from_numpy(object_types).to(torch.long).to(DEVICE).unsqueeze(0)
+    object_types_tensor = torch.from_numpy(
+        object_types).to(torch.long).to(DEVICE).unsqueeze(0)
 
     cur_pose = np.copy(start)
     global_wpt_idx = 1
@@ -235,21 +246,27 @@ def viz_helper(policy: Policy, start: np.ndarray, goal: np.ndarray, goal_radius,
     # Closed loop visualizing model rollout and executing only first action
     while (step < viz_args["max_num_steps"] and
            np.linalg.norm(cur_pose[:POS_DIM] - goal[:POS_DIM]) > viz_args["dist_tol"]):
-        cur_pose_tensor = torch.from_numpy(pose_to_model_input(cur_pose[np.newaxis])).to(torch.float32).to(DEVICE)
+        cur_pose_tensor = torch.from_numpy(pose_to_model_input(
+            cur_pose[np.newaxis])).to(torch.float32).to(DEVICE)
         object_forces_rollout = []
         rollout_traj = []
         for k in range(viz_args["rollout_horizon"]):
             # Define "object" inputs into policy
             # Current
-            current = torch.cat([cur_pose_tensor, agent_radius_tensor], dim=-1).unsqueeze(1)
+            current = torch.cat(
+                [cur_pose_tensor, agent_radius_tensor], dim=-1).unsqueeze(1)
             # Goal
-            goal_radii = torch.norm(goal_tensor[:, 0:POS_DIM] - cur_pose_tensor[:, 0:POS_DIM], dim=-1).unsqueeze(0)
-            goal_rot_objects = torch.cat([goal_tensor, goal_rot_radii], dim=-1).unsqueeze(1)
-            goal_objects = torch.cat([goal_tensor, goal_radii], dim=-1).unsqueeze(1)
+            goal_radii = torch.norm(
+                goal_tensor[:, 0:POS_DIM] - cur_pose_tensor[:, 0:POS_DIM], dim=-1).unsqueeze(0)
+            goal_rot_objects = torch.cat(
+                [goal_tensor, goal_rot_radii], dim=-1).unsqueeze(1)
+            goal_objects = torch.cat(
+                [goal_tensor, goal_radii], dim=-1).unsqueeze(1)
             # Start
             start_rot_radii = torch.norm(start_tensor[:, 0:POS_DIM] - cur_pose_tensor[:, 0:POS_DIM],
                                          dim=-1).unsqueeze(0)
-            start_rot_objects = torch.cat([start_tensor, start_rot_radii], dim=-1).unsqueeze(1)
+            start_rot_objects = torch.cat(
+                [start_tensor, start_rot_radii], dim=-1).unsqueeze(1)
 
             # Get policy output, form into action
             with torch.no_grad():
@@ -283,7 +300,8 @@ def viz_helper(policy: Policy, start: np.ndarray, goal: np.ndarray, goal_radius,
         rollout_traj = np.vstack(rollout_traj)
         cur_pose = rollout_traj[0]
         if len(object_forces_rollout) > 0:
-            object_forces_rollout = torch.cat(object_forces_rollout, dim=0).detach().cpu().numpy()
+            object_forces_rollout = torch.cat(
+                object_forces_rollout, dim=0).detach().cpu().numpy()
         else:
             object_forces_rollout = None
 
@@ -297,7 +315,8 @@ def viz_helper(policy: Policy, start: np.ndarray, goal: np.ndarray, goal_radius,
         except KeyboardInterrupt:
             exit()
 
-        global_wpt_idx = np.argmin(np.linalg.norm(cur_pose[:POS_DIM] - expert_traj[:, :POS_DIM], axis=1)) + 1
+        global_wpt_idx = np.argmin(np.linalg.norm(
+            cur_pose[:POS_DIM] - expert_traj[:, :POS_DIM], axis=1)) + 1
         global_wpt_idx = min(global_wpt_idx, expert_traj.shape[0] - 1)
         step += 1
 
@@ -331,7 +350,8 @@ def viz_main(policy: Policy, test_data_root: str, calc_pos, calc_rot):
         # Load data sample
         rand_file_idx = np.random.choice(100)
         print("file idx: %d" % rand_file_idx)
-        data = np.load(os.path.join(test_data_root, "traj_%d.npz" % rand_file_idx), allow_pickle=True)
+        data = np.load(os.path.join(test_data_root, "traj_%d.npz" %
+                       rand_file_idx), allow_pickle=True)
         expert_traj = data["states"]
         goal_radius = data["goal_radius"].item()
         object_poses = np.copy(data["object_poses"])
@@ -345,11 +365,12 @@ def viz_main(policy: Policy, test_data_root: str, calc_pos, calc_rot):
 
         viz_helper(policy, start=expert_traj[0], goal=expert_traj[-1],
                    goal_radius=goal_radius, object_poses=object_poses,
-                   object_radii=object_radii[:, np.newaxis], object_types=object_types,
+                   object_radii=object_radii[:,
+                                             np.newaxis], object_types=object_types,
                    objects=objects, expert_traj=expert_traj, ax=ax, viz_args=viz_args)
 
 
-def viz_adaptation(policy: Policy, test_data_root: str, train_pos, train_rot):
+def viz_adaptation(policy: Policy, test_data_root: str, train_pos, train_rot, adaptation_func):
     """
     Visually evalutes 2D policy with varying number of adaptation steps, where
     adaptation is performed directly on expert data.
@@ -372,21 +393,26 @@ def viz_adaptation(policy: Policy, test_data_root: str, train_pos, train_rot):
         # Load data
         rand_file_idx = np.random.choice(100)
         print("file idx: %d" % rand_file_idx)
-        data = np.load(os.path.join(test_data_root, "traj_%d.npz" % rand_file_idx), allow_pickle=True)
+        data = np.load(os.path.join(test_data_root, "traj_%d.npz" %
+                       rand_file_idx), allow_pickle=True)
         expert_traj = data["states"]
         T = expert_traj.shape[0]
         goal_radius = data["goal_radius"].item()
         object_poses = data["object_poses"]
         object_radii = data["object_radii"]
-        object_types = data["object_types"]  # NOTE: this is purely for viz, model should NOT known this!
+        # NOTE: this is purely for viz, model should NOT know this!
+        object_types = data["object_types"]
         theta_offsets = Params.ori_offsets_2D[object_types]
         start = expert_traj[0]
         goal = expert_traj[-1]
         num_objects = len(object_types)
-        object_idxs = np.arange(num_objects)  # NOTE: rather, object indices should be actual indices, not types
+        # NOTE: rather, object indices should be actual indices, not types
+        object_idxs = np.arange(num_objects)
         batch_data = (expert_traj, start, goal, goal_radius,
-                      object_poses[np.newaxis, :, :].repeat(T, axis=0),  # repeat for T timesteps unless object can move
-                      object_radii[np.newaxis, :, np.newaxis].repeat(T, axis=0),  # repeat for T timesteps
+                      # repeat for T timesteps unless object can move
+                      object_poses[np.newaxis, :, :].repeat(T, axis=0),
+                      object_radii[np.newaxis, :, np.newaxis].repeat(
+                          T, axis=0),  # repeat for T timesteps
                       object_idxs)
 
         objects = [
@@ -406,27 +432,31 @@ def viz_adaptation(policy: Policy, test_data_root: str, train_pos, train_rot):
         total_updates = 0
         for num_updates in num_updates_series:
             total_updates += num_updates
-            losses, pred_traj = perform_adaptation(policy, [batch_data],
-                                                   train_pos=train_pos, train_rot=train_rot,
-                                                   n_adapt_iters=num_updates, dstep=Params.dstep_2D,
-                                                   verbose=False, clip_params=True)
-            pred_traj = pred_traj[0].detach().cpu().numpy()  # remove batch dimension
+            _, pred_traj = adaptation_func(policy=policy, batch_data=[batch_data],
+                                           train_pos=train_pos, train_rot=train_rot,
+                                           n_adapt_iters=num_updates, dstep=Params.dstep_2D,
+                                           verbose=True, clip_params=True)
+            # remove batch dimension
+            pred_traj = pred_traj[0].detach().cpu().numpy()
 
             # Convert <cos, sin> representation back to theta
             pred_traj = np.hstack([pred_traj[:, :POS_DIM],
                                    np.arctan2(pred_traj[:, -1], pred_traj[:, -2])[:, np.newaxis]])
 
             if train_rot:
-                cur_offsets = torch.stack(policy.obj_rot_offsets).detach().cpu().numpy()
+                cur_offsets = torch.stack(
+                    policy.obj_rot_offsets).detach().cpu().numpy()
                 print(f"Learned rot offsets ({np.rad2deg(cur_offsets[object_idxs]).astype(int)}), "
                       f"actual ({np.rad2deg(theta_offsets).astype(int)})")
 
-                rot_pref_feats = torch.stack(policy.obj_rot_feats).detach().cpu().numpy()
+                rot_pref_feats = torch.stack(
+                    policy.obj_rot_feats).detach().cpu().numpy()
                 print(f"Learned rot pref-feats ({rot_pref_feats[object_idxs]}), "
                       f"Possible ({policy.policy_network.rot_pref_feat_train[object_types]}) ")
 
             if train_pos:
-                pos_pref_feats = torch.stack(policy.obj_pos_feats).detach().cpu().numpy()
+                pos_pref_feats = torch.stack(
+                    policy.obj_pos_feats).detach().cpu().numpy()
                 print(f"Learned pos pref-feats ({pos_pref_feats}), "
                       f"Possible ({policy.policy_network.pos_pref_feat_train[object_types]}) ")
 
@@ -439,13 +469,21 @@ def viz_adaptation(policy: Policy, test_data_root: str, train_pos, train_rot):
 
 def parse_arguments():
     parser = argparse.ArgumentParser()
-    parser.add_argument('--model_name', action='store', type=str, help="trained model name")
-    parser.add_argument('--data_name', action='store', type=str, help="name for data folder")
+    parser.add_argument('--model_name', action='store',
+                        type=str, help="trained model name")
+    parser.add_argument('--data_name', action='store',
+                        type=str, help="name for data folder")
     parser.add_argument('--loaded_epoch', action='store', type=int, default=-1)
-    parser.add_argument('--calc_rot', action='store_true', help="calculate position")
-    parser.add_argument('--calc_pos', action='store_true', help="calculate rotation")
+    parser.add_argument('--calc_rot', action='store_true',
+                        help="calculate position")
+    parser.add_argument('--calc_pos', action='store_true',
+                        help="calculate rotation")
     parser.add_argument('--adapt', action='store_true',
                         help="Viz adaptation. If False, viz policy with pretrained object features.")
+    parser.add_argument('--use_rls', action='store_true',
+                        help="Use rls to adapt object features.")
+    parser.add_argument('--use_learn2learn', action='store_true',
+                        help="Use Learn2learn to adapt object features.")
     return parser.parse_args()
 
 
@@ -471,9 +509,24 @@ if __name__ == '__main__':
 
     # ######### Visualize pretrained behavior #######
     if not args.adapt:
-        viz_main(policy, test_data_root, calc_pos=args.calc_pos, calc_rot=args.calc_rot)
+        viz_main(policy, test_data_root,
+                 calc_pos=args.calc_pos, calc_rot=args.calc_rot)
 
     # ######### Visualize adaptation behavior #######
     # define scene objects and whether or not we care about their pos/ori
     else:
-        viz_adaptation(policy, test_data_root, train_pos=args.calc_pos, train_rot=args.calc_rot)
+        if args.use_rls:
+            print("Using RLS to adapt object features.")
+            rls = RLS(alpha=1.0, lmbda=0.1)
+            adaptation_func = lambda *args, **kwargs: perform_adaptation_rls(
+                rls=rls, *args, **kwargs)
+        elif args.use_learn2learn:
+            print("Using Learn2Learn to adapt object features.")
+            adaptation_func = perform_adaptation_learn2learn
+        else:
+            print("Using Adam SGD to adapt object features.")
+            adaptation_func = perform_adaptation
+
+        viz_adaptation(policy, test_data_root,
+                       train_pos=args.calc_pos, train_rot=args.calc_rot,
+                       adaptation_func=adaptation_func)
