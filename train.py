@@ -816,7 +816,7 @@ def perform_adaptation_rls(policy: Policy, rls: RLS, batch_data: List[Tuple],
         right = pos_dim + train_rot if train_rot else pos_dim
         y = traj_tensors[:, 1:, left:right]
         yhat = pred_traj[:, :, left:right]
-        rls.update(y=y, yhat=yhat, theta=adaptable_parameters)
+        rls.update(y=y, yhat=yhat, thetas=adaptable_parameters)
 
         loss = torch.norm(y - yhat, dim=2).mean()
         losses.append(loss.item())
