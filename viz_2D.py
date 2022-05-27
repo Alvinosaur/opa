@@ -517,7 +517,7 @@ if __name__ == '__main__':
     else:
         if args.use_rls:
             print("Using RLS to adapt object features.")
-            rls = RLS(alpha=1.0, lmbda=0.1)
+            rls = RLS(alpha=0.5, lmbda=0.4)
             adaptation_func = lambda *args, **kwargs: perform_adaptation_rls(
                 rls=rls, *args, **kwargs)
         elif args.use_learn2learn:

@@ -19,13 +19,13 @@ class RLS(object):
         y = y.flatten()
         length = y.shape[0]
 
-        # Get gradient of thetas wrt outputs (ie: Jacobian)?
+        # Get gradient of thetas wrt outputs (ie: Jacobian)
         # Reference: https://stackoverflow.com/questions/43451125/pytorch-what-are-the-gradient-arguments/47026836
         # More efficient way? https://gist.github.com/sbarratt/37356c46ad1350d4c30aefbd488a4faa
         all_Gs = []
         for i in range(length):
             dL_dyhat = torch.nn.functional.one_hot(
-                torch.tensor(i), length).float()
+                torch.tensor(i), num_classes=length).float().to(y.device)
             G = autograd.grad(yhat, thetas, dL_dyhat,
                               allow_unused=True, retain_graph=True)
             all_Gs.append(G)
@@ -78,7 +78,7 @@ def rls_example_1D():
     def f(x): return x ** 2
 
     alpha = 0.3  # learning rate
-    lmbda = 0.1  # forgetting factor
+    lmbda = 1.0  # forgetting factor
     rls = RLS(lmbda=lmbda, alpha=alpha)
 
     N = 10  # number of data points
@@ -99,7 +99,7 @@ def rls_example_1D():
         thetas.append(theta.item())
 
     # Plotting
-    plt.plot(xs, ys, label="Ground Truth")
+    plt.plot(xs, ys, label="Ground Truth", color="black", linewidth=2)
     plt.title("RLS(lambda=%.2f, alpha=%.2f)" % (lmbda, alpha))
     colors = cm.rainbow(np.linspace(0, 1, N))
     for i in range(N-1):

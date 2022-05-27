@@ -11,6 +11,7 @@ import matplotlib.pyplot as plt
 import shutil
 import random
 import argparse
+from sqlalchemy import desc
 from tqdm import tqdm
 from typing import *
 import json
@@ -795,6 +796,7 @@ def perform_adaptation_rls(policy: Policy, rls: RLS, batch_data: List[Tuple],
     B, T = traj_tensors.shape[0:2]
     input_dim = traj_tensors.shape[2] - 1  # excluding radius
     pos_dim = 3 if input_dim == 7 else 2
+    rot_dim = 6 if input_dim == 7 else 2
     out_T = T - 1
     agent_radii = torch.tensor(
         [Params.agent_radius], device=DEVICE).view(1, 1).repeat(B, 1)
@@ -813,15 +815,24 @@ def perform_adaptation_rls(policy: Policy, rls: RLS, batch_data: List[Tuple],
 
         # Compute error for RLS (Least squares loss) (y - yhat)
         left = 0 if train_pos else pos_dim
-        right = pos_dim + train_rot if train_rot else pos_dim
+        right = pos_dim + rot_dim if train_rot else pos_dim
         y = traj_tensors[:, 1:, left:right]
         yhat = pred_traj[:, :, left:right]
-        rls.update(y=y, yhat=yhat, thetas=adaptable_parameters)
+
+        # RLS is slow, so only calculate loss for subset of traj
+        error = torch.norm(y - yhat, dim=2)[0]
+        rand_indices = torch.argsort(error, descending=True)[:10]
+        # rand_indices = torch.randint(low=0, high=out_T, size=(15,))
+        y_sampled = y[:, rand_indices, :]
+        yhat_sampled = yhat[:, rand_indices, :]
+
+        rls.update(y=y_sampled, yhat=yhat_sampled, thetas=adaptable_parameters)
 
         loss = torch.norm(y - yhat, dim=2).mean()
         losses.append(loss.item())
         if verbose:
             print("iter %d loss: %.3f" % (iteration + 1, loss.item()))
+            print("params: ", adaptable_parameters)
 
     # Clip learned features within expected range
     if clip_params:

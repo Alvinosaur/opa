@@ -235,10 +235,6 @@ class PolicyNetwork(nn.Module):
         self.radius_idx = -1  # index of radius in input feature vectors 
         self.device = device
 
-        # Start and goal treated as "objects", stored as last two elements
-        self.start_idx = -2
-        self.goal_idx = -1
-
         # Learned preference features **during training**, which is why n_objects is known beforehand
         # +1 objects for goal
         self.pos_pref_feat_train = nn.Parameter(
@@ -395,8 +391,8 @@ class PolicyNetwork(nn.Module):
         """
         # Append start and goal to input object poses and indices
         B = objects.shape[0]
-        goal_rot_feat_idx = torch.full(size=(B, 1), fill_value=self.goal_idx, device=self.device)
-        start_rot_feat_idx = torch.full(size=(B, 1), fill_value=self.start_idx, device=self.device)
+        goal_rot_feat_idx = torch.full(size=(B, 1), fill_value=Params.GOAL_IDX, device=self.device)
+        start_rot_feat_idx = torch.full(size=(B, 1), fill_value=Params.START_IDX, device=self.device)
         feat_idxs = torch.cat([object_indices, start_rot_feat_idx, goal_rot_feat_idx], dim=1)
         input_poses = torch.cat([objects, start, goal_rot], dim=1)
 
@@ -467,7 +463,7 @@ class PolicyNetwork(nn.Module):
         B, n_objects, obj_dim = objects.shape
         input_poses = torch.cat([objects, goal], dim=1)
         agent_pose = current.repeat(1, n_objects + 1, 1)  # +1 for goal
-        goal_pos_feat_idx = torch.full(size=(B, 1), fill_value=-1, device=self.device)
+        goal_pos_feat_idx = torch.full(size=(B, 1), fill_value=Params.GOAL_IDX, device=self.device)
         feat_idxs = torch.cat([object_indices, goal_pos_feat_idx], dim=1)
 
         # Select correct learned position preference features and offsets
