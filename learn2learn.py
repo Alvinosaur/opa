@@ -213,6 +213,32 @@ def train_helper(policy: Policy, learned_opt: LearnedOptimizer, batch_data, trai
     return losses
 
 
+def plot_losses(fig, ax_pos, ax_rot, all_pos_losses, all_rot_losses, figname):
+    ax_pos.set_title("Position Loss vs Adaptation Step")
+    for i in range(len(all_pos_losses)):
+        ax_pos.plot(all_pos_losses[i], label="Epoch %d" % (i+1))
+    ax_pos.legend()
+
+    ax_rot.set_title("Rotation Loss vs Adaptation Step")
+    for i in range(len(all_rot_losses)):
+        ax_rot.plot(all_rot_losses[i], label="Epoch %d" % (i+1))
+    ax_rot.legend()
+
+    ax_pos.set_xticks(np.arange(0, len(all_pos_losses[0])))
+    ax_rot.set_xticks(np.arange(0, len(all_rot_losses[0])))
+    ax_pos.set_yticks(np.linspace(0, np.max(all_pos_losses), 5))
+    ax_rot.set_yticks(np.linspace(0, np.max(all_rot_losses), 5))
+
+    fig.supxlabel("Adaptation Step")
+    fig.supylabel("Loss")
+    fig.suptitle("Losses")
+    plt.tight_layout()
+    plt.savefig(figname)
+
+    ax_pos.clear()
+    ax_rot.clear()
+
+
 def train(policy: Policy, learned_opt: LearnedOptimizer, train_args, saved_root: str,
           is_3D: bool, adapt_kwargs: dict):
     # can reduce if CPU RAM is not enough, just pre-loads data to reduce file reads
@@ -257,16 +283,24 @@ def train(policy: Policy, learned_opt: LearnedOptimizer, train_args, saved_root:
             batch_pos_losses += pos_losses
 
             # Rotation parameter adaptation
-            # rot_indices = train_rot_indices[b *
-            #                                 batch_size:(b + 1) * batch_size]
-            # rot_batch_data = load_batch(train_rot_dataset, rot_indices)
-            # rot_losses = train_helper(
-            #     policy, learned_opt, rot_batch_data, train_pos=False, train_rot=True, adapt_kwargs=adapt_kwargs)
-            # batch_rot_losses += rot_losses
+            rot_indices = train_rot_indices[b *
+                                            batch_size:(b + 1) * batch_size]
+            rot_batch_data = load_batch(train_rot_dataset, rot_indices)
+            rot_losses = train_helper(
+                policy, learned_opt, rot_batch_data, train_pos=False, train_rot=True, adapt_kwargs=adapt_kwargs)
+            batch_rot_losses += rot_losses
             pbar.update(1)
 
-        avg_batch_pos_losses = batch_pos_losses / batch_size
-        avg_batch_rot_losses = batch_rot_losses / batch_size
+            if b % 10 == 0:
+                print(batch_pos_losses / (b+1))
+                print(batch_rot_losses / (b+1))
+
+        avg_batch_pos_losses = batch_pos_losses / num_train_batches
+        avg_batch_rot_losses = batch_rot_losses / num_train_batches
+        print("Avg pos loss vs updates")
+        print(avg_batch_pos_losses)
+        print("Avg rot loss vs updates")
+        print(avg_batch_rot_losses)
         all_pos_losses.append(avg_batch_pos_losses)
         all_rot_losses.append(avg_batch_rot_losses)
 
@@ -289,37 +323,16 @@ def train(policy: Policy, learned_opt: LearnedOptimizer, train_args, saved_root:
         if epoch % epochs_per_save == 0:
             torch.save(learned_opt.state_dict(), os.path.join(
                 saved_root, "learned_opt_%d.h5" % (epoch + 1)))
-
-            ax_pos.set_title("Position Loss Per Adaptation Step")
-            for i in range(epoch+1):
-                ax_pos.plot(all_pos_losses[i], label="Epoch %d" % epoch)
-            ax_pos.legend()
-
-            ax_rot.set_title("Rotation Loss Per Adaptation Step")
-            for i in range(epoch+1):
-                ax_rot.plot(all_rot_losses[i], label="Epoch %d" % epoch)
-            ax_rot.legend()
-
-            plt.savefig(os.path.join(saved_root, "adaptor_loss.png"))
-            plt.clf()
+            plot_losses(fig, ax_pos, ax_rot, all_pos_losses, all_rot_losses,
+                        figname=os.path.join(saved_root, "adaptor_loss.png"))
+            np.savez(os.path.join(saved_root, "losses"),
+                     all_rot_losses=all_rot_losses, all_pos_losses=all_pos_losses)
 
     # Save final model
     torch.save(learned_opt.state_dict(), os.path.join(
         saved_root, "learned_opt_%d.h5" % (epoch + 1)))
-
-    ax_pos.set_title("Position Loss Per Adaptation Step")
-    for i in range(epoch+1):
-        ax_pos.plot(all_pos_losses[i], label="Epoch %d" % epoch)
-    ax_pos.legend()
-
-    ax_rot.set_title("Rotation Loss Per Adaptation Step")
-    for i in range(epoch+1):
-        ax_rot.plot(all_rot_losses[i], label="Epoch %d" % epoch)
-    ax_rot.legend()
-
-    plt.savefig(os.path.join(saved_root, "adaptor_loss.png"))
-    plt.clf()
-
+    plot_losses(fig, ax_pos, ax_rot, all_pos_losses, all_rot_losses,
+                figname=os.path.join(saved_root, "adaptor_loss.png"))
     np.savez(os.path.join(saved_root, "losses"),
              all_rot_losses=all_rot_losses, all_pos_losses=all_pos_losses)
 
