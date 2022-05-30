@@ -10,8 +10,15 @@ from scipy.spatial.transform import Rotation as R
 
 import torch
 import torch.nn as nn
+from torch.autograd import Variable
 
 from data_params import Params
+
+
+def to_var(x, requires_grad=True):
+    if torch.cuda.is_available():
+        x = x.cuda()
+    return Variable(x, requires_grad=requires_grad)
 
 
 def quat2mat(Q: torch.Tensor):
@@ -120,7 +127,8 @@ def decode_ori(out):
         ori_quat = R.from_matrix(R_mat).as_quat()
         return ori_quat
     else:
-        raise ValueError("Invalid orientation shape: {}, expected 2 or 6".format(ori_dim))
+        raise ValueError(
+            "Invalid orientation shape: {}, expected 2 or 6".format(ori_dim))
 
 
 def pose_to_model_input(pose):
@@ -129,7 +137,8 @@ def pose_to_model_input(pose):
     :param pose: input pose (N x pose_dim)
     :return: model input pose (N x model_pose_dim)
     """
-    assert isinstance(pose, np.ndarray)  # Tensors not allowed! Need to use scipy.Rot!
+    assert isinstance(
+        pose, np.ndarray)  # Tensors not allowed! Need to use scipy.Rot!
     assert len(pose.shape) == 2  # Only two dimensions Batch x pose_dim
     if pose.shape[1] == 2 + 1:
         pos = pose[:, :2]
@@ -232,17 +241,19 @@ class PolicyNetwork(nn.Module):
         self.rot_dim = rot_dim
         self.pos_idxs = list(range(pos_dim))
         self.rot_idxs = list(range(pos_dim, pos_dim + rot_dim))
-        self.radius_idx = -1  # index of radius in input feature vectors 
+        self.radius_idx = -1  # index of radius in input feature vectors
         self.device = device
 
         # Learned preference features **during training**, which is why n_objects is known beforehand
         # +1 objects for goal
         self.pos_pref_feat_train = nn.Parameter(
-            torch.randn((n_objects + 1, pos_preference_dim), device=device, dtype=torch.float32),
+            torch.randn((n_objects + 1, pos_preference_dim),
+                        device=device, dtype=torch.float32),
             requires_grad=True)
         # +2 objects for start and goal
         self.rot_pref_feat_train = nn.Parameter(
-            torch.randn((n_objects + 2, rot_preference_dim), device=device, dtype=torch.float32),
+            torch.randn((n_objects + 2, rot_preference_dim),
+                        device=device, dtype=torch.float32),
             requires_grad=True)
         self.rot_offsets_train = None  # learned rotational offset, initalized below
         self.apply_rot_offset = None  # function to apply rot offset, initalized below
@@ -255,7 +266,8 @@ class PolicyNetwork(nn.Module):
         self.rot_offsets_test = []
 
         # Define position and rotation networks
-        pos_input_feat_size = pos_dim + pos_preference_dim + 2  # +2 for sign_wrt_goal and relative distance
+        pos_input_feat_size = pos_dim + pos_preference_dim + \
+            2  # +2 for sign_wrt_goal and relative distance
         self.pos_relation_network = RelationNetwork(input_size=pos_input_feat_size,
                                                     output_size=pos_dim,
                                                     hidden_size=hidden_dim,
@@ -280,7 +292,8 @@ class PolicyNetwork(nn.Module):
         if self.rot_dim == 2:
             # learned offset is stored and applied as 1D \theta offset
             self.rot_offsets_train = nn.Parameter(
-                torch.zeros((n_objects, 1), device=device, dtype=torch.float32),
+                torch.zeros((n_objects, 1), device=device,
+                            dtype=torch.float32),
                 requires_grad=True)
 
             # use 2D function
@@ -291,7 +304,8 @@ class PolicyNetwork(nn.Module):
 
         elif self.rot_dim == 6:  # Rx(3), Ry(3)
             # learned offset is stored and applied as 4D quaternion
-            zero_rot = torch.tensor([0., 0., 0., 1.], device=self.device, dtype=torch.float32)
+            zero_rot = torch.tensor(
+                [0., 0., 0., 1.], device=self.device, dtype=torch.float32)
             self.rot_offsets_train = nn.Parameter(
                 zero_rot.unsqueeze(0).repeat(n_objects, 1), requires_grad=True)
 
@@ -302,7 +316,8 @@ class PolicyNetwork(nn.Module):
             assert self.rot_idxs == [3, 4, 5, 6, 7, 8]
 
         else:
-            raise ValueError("Unexpected rotation dimensionality: %d" % self.rot_dim)
+            raise ValueError(
+                "Unexpected rotation dimensionality: %d" % self.rot_dim)
 
     def apply_rot_offset_2D(self, input_poses, rot_offset) -> torch.Tensor:
         """
@@ -349,7 +364,8 @@ class PolicyNetwork(nn.Module):
         # Normalize learned rotation offset quaternions
         # and convert to rotation matrices
         B, n_objects, q_shape = rot_offset.shape
-        q_offsets = (rot_offset / rot_offset.norm(dim=-1, keepdim=True)).view(B * n_objects, 4)
+        q_offsets = (rot_offset / rot_offset.norm(dim=-1,
+                     keepdim=True)).view(B * n_objects, 4)
         rot_offset_mats = quat2mat(q_offsets)
 
         # Apply learned rotation offset to input object orientations
@@ -391,9 +407,12 @@ class PolicyNetwork(nn.Module):
         """
         # Append start and goal to input object poses and indices
         B = objects.shape[0]
-        goal_rot_feat_idx = torch.full(size=(B, 1), fill_value=Params.GOAL_IDX, device=self.device)
-        start_rot_feat_idx = torch.full(size=(B, 1), fill_value=Params.START_IDX, device=self.device)
-        feat_idxs = torch.cat([object_indices, start_rot_feat_idx, goal_rot_feat_idx], dim=1)
+        goal_rot_feat_idx = torch.full(
+            size=(B, 1), fill_value=Params.GOAL_IDX, device=self.device)
+        start_rot_feat_idx = torch.full(
+            size=(B, 1), fill_value=Params.START_IDX, device=self.device)
+        feat_idxs = torch.cat(
+            [object_indices, start_rot_feat_idx, goal_rot_feat_idx], dim=1)
         input_poses = torch.cat([objects, start, goal_rot], dim=1)
 
         # Select correct learned rotation preference features and offsets
@@ -402,16 +421,19 @@ class PolicyNetwork(nn.Module):
             rot_offsets_rep = self.rot_offsets_train[feat_idxs]
         else:
             rot_pref_feat_rep = torch.cat([
-                torch.stack([self.rot_pref_feat_test[obj_i] for obj_i in feat_idxs[b]]).unsqueeze(0)
+                torch.stack([self.rot_pref_feat_test[obj_i]
+                            for obj_i in feat_idxs[b]]).unsqueeze(0)
                 for b in range(B)
             ], dim=0)
             rot_offsets_rep = torch.cat([
-                torch.stack([self.rot_offsets_test[obj_i] for obj_i in feat_idxs[b]]).unsqueeze(0)
+                torch.stack([self.rot_offsets_test[obj_i]
+                            for obj_i in feat_idxs[b]]).unsqueeze(0)
                 for b in range(B)
             ], dim=0)
 
         # Apply learned rotation offset to object orientations
-        input_rot_effects = self.apply_rot_offset(input_poses=input_poses, rot_offset=rot_offsets_rep)
+        input_rot_effects = self.apply_rot_offset(
+            input_poses=input_poses, rot_offset=rot_offsets_rep)
 
         # Feed into Rotation Relation Network to get contribution from each object
         edges, rot_alphas = self.rot_relation_network(
@@ -428,7 +450,8 @@ class PolicyNetwork(nn.Module):
         # Normalize
         if self.rot_dim == 2:
             # produce valid unit vector <cos, sin>
-            predicted_rot_vec = rot_effect_receivers / torch.norm(rot_effect_receivers, dim=-1, keepdim=True)
+            predicted_rot_vec = rot_effect_receivers / \
+                torch.norm(rot_effect_receivers, dim=-1, keepdim=True)
         else:
             Rx = rot_effect_receivers[:, 0:3]
             Rx = Rx / torch.norm(Rx, dim=-1, keepdim=True)
@@ -463,7 +486,8 @@ class PolicyNetwork(nn.Module):
         B, n_objects, obj_dim = objects.shape
         input_poses = torch.cat([objects, goal], dim=1)
         agent_pose = current.repeat(1, n_objects + 1, 1)  # +1 for goal
-        goal_pos_feat_idx = torch.full(size=(B, 1), fill_value=Params.GOAL_IDX, device=self.device)
+        goal_pos_feat_idx = torch.full(
+            size=(B, 1), fill_value=Params.GOAL_IDX, device=self.device)
         feat_idxs = torch.cat([object_indices, goal_pos_feat_idx], dim=1)
 
         # Select correct learned position preference features and offsets
@@ -471,15 +495,19 @@ class PolicyNetwork(nn.Module):
             pos_pref_feat_rep = self.pos_pref_feat_train[feat_idxs]
         else:
             pos_pref_feat_rep = torch.cat([
-                torch.stack([self.pos_pref_feat_test[obj_i] for obj_i in feat_idxs[b]]).unsqueeze(0)
+                torch.stack([self.pos_pref_feat_test[obj_i]
+                            for obj_i in feat_idxs[b]]).unsqueeze(0)
                 for b in range(B)
             ], dim=0)  # B x num_objects x learned dimension (c)
 
         # Compute feature: sign of direction to each object wrt direction to goal
-        pos_input_vecs = input_poses[:, :, self.pos_idxs] - agent_pose[:, :, self.pos_idxs]
-        pos_input_vecs = pos_input_vecs / torch.norm(pos_input_vecs, dim=-1, keepdim=True)
+        pos_input_vecs = input_poses[:, :,
+                                     self.pos_idxs] - agent_pose[:, :, self.pos_idxs]
+        pos_input_vecs = pos_input_vecs / \
+            torch.norm(pos_input_vecs, dim=-1, keepdim=True)
         # (B x K x 2) * (B x 2) = (B x K) dot-prod between all vecs and the goal-agent vecs
-        sign_wrt_goal = torch.einsum('bki,bi->bk', pos_input_vecs[:, :], pos_input_vecs[:, -1])
+        sign_wrt_goal = torch.einsum(
+            'bki,bi->bk', pos_input_vecs[:, :], pos_input_vecs[:, -1])
 
         # Feed into Position Relation Network to get contribution from each object
         pos_effects, pos_alphas = self.pos_relation_network(
@@ -491,8 +519,10 @@ class PolicyNetwork(nn.Module):
         )
 
         # Aggregate and normalize
-        pos_effect_receivers = (pos_alphas * pos_effects).sum(dim=1)  # sum up weighted effects of all objects
-        predicted_pos_vec = pos_effect_receivers / torch.norm(pos_effect_receivers, dim=-1, keepdim=True)
+        # sum up weighted effects of all objects
+        pos_effect_receivers = (pos_alphas * pos_effects).sum(dim=1)
+        predicted_pos_vec = pos_effect_receivers / \
+            torch.norm(pos_effect_receivers, dim=-1, keepdim=True)
 
         return predicted_pos_vec, pos_effects
 
@@ -518,8 +548,10 @@ class PolicyNetwork(nn.Module):
         :return:
         """
         B, n_objects, obj_dim = objects.shape
-        assert object_indices.shape[1] == n_objects  # object_indices only includes objects
-        assert current.shape[-1] == self.pos_dim + self.rot_dim + 1  # +1 for radius
+        # object_indices only includes objects
+        assert object_indices.shape[1] == n_objects
+        assert current.shape[-1] == self.pos_dim + \
+            self.rot_dim + 1  # +1 for radius
         assert start.shape[-1] == self.pos_dim + self.rot_dim + 1
         assert goal.shape[-1] == self.pos_dim + self.rot_dim + 1
         assert goal_rot.shape[-1] == self.pos_dim + self.rot_dim + 1
@@ -536,7 +568,8 @@ class PolicyNetwork(nn.Module):
                                            r2=current[:, :, self.radius_idx])
         goal_rot_dist_ratios = calc_dist_ratio(x1=goal_rot[:, :, self.pos_idxs],
                                                x2=current[:, :, self.pos_idxs],
-                                               r1=goal_rot[:, :, self.radius_idx],
+                                               r1=goal_rot[:, :,
+                                                           self.radius_idx],
                                                r2=current[:, :, self.radius_idx])
         start_dist_ratios = calc_dist_ratio(x1=start[:, :, self.pos_idxs],
                                             x2=current[:, :, self.pos_idxs],
@@ -548,32 +581,57 @@ class PolicyNetwork(nn.Module):
 
         # Compute position and/or rotation actions
         if calc_pos:
-            pos_dist_ratios = torch.cat([obj_dist_ratios, goal_dist_ratios], dim=1)
+            pos_dist_ratios = torch.cat(
+                [obj_dist_ratios, goal_dist_ratios], dim=1)
             predicted_pos_vec, pos_effects = self.calc_pos_vec(
                 current, goal, objects, object_indices, pos_dist_ratios, is_training)
 
         if calc_rot:
-            pos_dist_ratios = torch.cat([obj_dist_ratios, start_dist_ratios, goal_rot_dist_ratios], dim=1)
+            pos_dist_ratios = torch.cat(
+                [obj_dist_ratios, start_dist_ratios, goal_rot_dist_ratios], dim=1)
             predicted_rot_vec = self.calc_rot_vec(
                 start, goal_rot, objects, object_indices, pos_dist_ratios, is_training)
 
         return predicted_pos_vec, predicted_rot_vec, pos_effects
 
 
+def detach_tensor(v):
+    new_v = v.clone().detach()
+    new_v.requires_grad = v.requires_grad
+    return new_v
+
+
+def clone_tensor(v):
+    new_v = v.clone()
+    if v.requires_grad:
+        new_v.retain_grad()
+    # new_v.requires_grad = v.requires_grad
+    return new_v
+
+
 class Policy(object):
+    POS_FEAT = 0  # NOTE: value matters!
+    ROT_FEAT = 1
+    ROT_OFFSET = 2
+
     def __init__(self, policy_network: PolicyNetwork):
         # NOTE: not necessary to set "requires_grad=False" for all core network weights
         #   because perform_adaptation() in train.py only defines Adam optimizer
         #   using params from self.adaptable_parameters that have requires_grad=True
         self.policy_network = policy_network
 
-        pos_repel_feat = self.policy_network.pos_pref_feat_train[Params.REPEL_IDX].detach()
-        pos_attract_feat = self.policy_network.pos_pref_feat_train[Params.ATTRACT_IDX].detach()
-        rot_ignore_feat = self.policy_network.rot_pref_feat_train[Params.IGNORE_ROT_IDX].detach()
-        rot_care_feat = self.policy_network.rot_pref_feat_train[Params.CARE_ROT_IDX].detach()
+        pos_repel_feat = self.policy_network.pos_pref_feat_train[Params.REPEL_IDX].detach(
+        )
+        pos_attract_feat = self.policy_network.pos_pref_feat_train[Params.ATTRACT_IDX].detach(
+        )
+        rot_ignore_feat = self.policy_network.rot_pref_feat_train[Params.IGNORE_ROT_IDX].detach(
+        )
+        rot_care_feat = self.policy_network.rot_pref_feat_train[Params.CARE_ROT_IDX].detach(
+        )
 
         a = 0.35  # TODO: Tune this after training using viz_3D.py
-        self.pos_ignore_feat = (a * pos_repel_feat + (1 - a) * pos_attract_feat)
+        self.pos_ignore_feat = (a * pos_repel_feat +
+                                (1 - a) * pos_attract_feat)
 
         # self.pos_ignore_feat = self.policy_network.pos_pref_feat_train[Params.GOAL_IDX].detach()
 
@@ -584,77 +642,125 @@ class Policy(object):
         self.obj_rot_feats = []
         self.obj_rot_offsets = []
         self.adaptable_parameters = []
+        self.adaptable_parameter_types = []
 
-        # Optional: to avoid unexpected behavior, clamp min/max of features 
+        # Optional: to avoid unexpected behavior, clamp min/max of features
         # based on the extrema of object behavior
         # NOTE: due to training initialization, attract feat > repel feat, not applicable for dims > 1
         #   and ignore_rot < care_rot
-        self.pos_pref_feat_bounds = (pos_repel_feat, pos_attract_feat)
-        self.rot_pref_feat_bounds = (rot_ignore_feat, rot_care_feat)
+        self.pos_pref_feat_bounds = (
+            pos_repel_feat.data, pos_attract_feat.data)
+        self.rot_pref_feat_bounds = (rot_ignore_feat.data, rot_care_feat.data)
 
     def __call__(self, is_training=False, *args, **kwargs):
         # NOTE: set is_training=False by default since Policy() class used for test-time typically
         return self.policy_network(is_training=is_training, *args, **kwargs)
 
-    def init_new_objs(self, pos_obj_types: List[Union[int, None]], rot_obj_types: List[Union[int, None]],
-                      pos_requires_grad=None, rot_requires_grad=None):
-        pos_repel_feat = self.policy_network.pos_pref_feat_train[Params.REPEL_IDX].detach()
-        pos_attract_feat = self.policy_network.pos_pref_feat_train[Params.ATTRACT_IDX].detach()
-        rot_care_feat = self.policy_network.rot_pref_feat_train[Params.CARE_ROT_IDX].detach()
+    def update_obj_feats_with_grad(self, new_params, same_var):
+        # NOTE that not all params may have new value. In this case, the old value should be kept
+        new_feat_list = [[], [], []]  # pos, rot, rot_offset
+        pi = 0
+        for i, (old_p, p_type) in enumerate(zip(self.adaptable_parameters, self.adaptable_parameter_types)):
+            if old_p.requires_grad:
+                new_feat_list[p_type].append(new_params[pi])
+                pi += 1
+            else:
+                new_feat_list[p_type].append(old_p)
 
-        # By default, make requires_grad=True for all new objects unless specified
-        n_objects = len(pos_obj_types)
-        pos_requires_grad = [True] * n_objects if pos_requires_grad is None else pos_requires_grad
-        rot_requires_grad = [True] * n_objects if rot_requires_grad is None else rot_requires_grad
+        self.update_obj_feats(*new_feat_list, same_var=same_var)
 
-        # Pos/Ori features to either specific value or "ignore" by default
-        self.obj_pos_feats = []
-        self.obj_rot_feats = []
-        self.obj_rot_offsets = []
-        for i in range(n_objects):
-            # Position
-            if pos_obj_types[i] == Params.REPEL_IDX:
-                self.obj_pos_feats.append(torch.clone(pos_repel_feat))
-            elif pos_obj_types[i] == Params.ATTRACT_IDX:
-                self.obj_pos_feats.append(torch.clone(pos_attract_feat))
-            else:  # None
-                self.obj_pos_feats.append(torch.clone(self.pos_ignore_feat))
-            self.obj_pos_feats[-1].requires_grad = pos_requires_grad[i]
+    def update_obj_feats(self, obj_pos_feats, obj_rot_feats, obj_rot_offsets, same_var):
+        if same_var:
+            self.obj_pos_feats = obj_pos_feats
+            self.obj_rot_feats = obj_rot_feats
+            self.obj_rot_offsets = obj_rot_offsets
+        else:
+            self.obj_pos_feats = [detach_tensor(v) for v in obj_pos_feats]
+            self.obj_rot_feats = [detach_tensor(v) for v in obj_rot_feats]
+            self.obj_rot_offsets = [detach_tensor(v) for v in obj_rot_offsets]
 
-            # Rotation
-            if rot_obj_types[i] == Params.CARE_ROT_IDX:
-                self.obj_rot_feats.append(torch.clone(rot_care_feat))
-            else:  # IGNORE_ROT_IDX or None
-                # if type not specified, just initialize as "ignore"
-                self.obj_rot_feats.append(torch.clone(self.rot_ignore_feat))
-            self.obj_rot_feats[-1].requires_grad = rot_requires_grad[i]
-
-            # Rotation offset
-            # initialized as "0" which the start feature represents due to training
-            self.obj_rot_offsets.append(torch.clone(self.policy_network.rot_offsets_train[Params.START_IDX].data))
-            self.obj_rot_offsets[-1].requires_grad = rot_requires_grad[i]
-
-        # Save newly initialized object preference features/offsets
-        # also append start and/or goal features with requires_grad=False to freeze them
         self.policy_network.pos_pref_feat_test = self.obj_pos_feats + [
             torch.clone(self.policy_network.pos_pref_feat_train[Params.GOAL_IDX]).data]
         self.policy_network.pos_pref_feat_test[-1].requires_grad = False
 
         self.policy_network.rot_pref_feat_test = self.obj_rot_feats + [
-            torch.clone(self.policy_network.rot_pref_feat_train[Params.START_IDX]).data,
+            torch.clone(
+                self.policy_network.rot_pref_feat_train[Params.START_IDX]).data,
             torch.clone(self.policy_network.rot_pref_feat_train[Params.GOAL_IDX]).data]
         self.policy_network.rot_pref_feat_test[-2].requires_grad = False
         self.policy_network.rot_pref_feat_test[-1].requires_grad = False
 
         self.policy_network.rot_offsets_test = self.obj_rot_offsets + [
-            torch.clone(self.policy_network.rot_offsets_train[Params.START_IDX]).data,
+            torch.clone(
+                self.policy_network.rot_offsets_train[Params.START_IDX]).data,
             torch.clone(self.policy_network.rot_offsets_train[Params.GOAL_IDX]).data]
         self.policy_network.rot_offsets_test[-2].requires_grad = False
         self.policy_network.rot_offsets_test[-1].requires_grad = False
 
         # Define adaptable parameters: only objects are adaptable currently
         # though this should be extendable to also adapt start/goal
-        self.adaptable_parameters = self.obj_pos_feats + self.obj_rot_feats + self.obj_rot_offsets
+        self.adaptable_parameters = self.obj_pos_feats + \
+            self.obj_rot_feats + self.obj_rot_offsets
+        self.adaptable_parameter_types = (
+            [self.POS_FEAT] * len(self.obj_pos_feats) +
+            [self.ROT_FEAT] * len(self.obj_rot_feats) +
+            [self.ROT_OFFSET] * len(self.obj_rot_offsets))
+
+    def detach_obj_feats(self):
+        self.update_obj_feats(
+            self.obj_pos_feats, self.obj_rot_feats, self.obj_rot_offsets, same_var=False)
+        self.policy_network.zero_grad()
+
+    def init_new_objs(self, pos_obj_types: List[Union[int, None]], rot_obj_types: List[Union[int, None]],
+                      pos_requires_grad=None, rot_requires_grad=None):
+        pos_repel_feat = self.policy_network.pos_pref_feat_train[Params.REPEL_IDX].detach(
+        )
+        pos_attract_feat = self.policy_network.pos_pref_feat_train[Params.ATTRACT_IDX].detach(
+        )
+        rot_care_feat = self.policy_network.rot_pref_feat_train[Params.CARE_ROT_IDX].detach(
+        )
+
+        # By default, make requires_grad=True for all new objects unless specified
+        n_objects = len(pos_obj_types)
+        pos_requires_grad = [
+            True] * n_objects if pos_requires_grad is None else pos_requires_grad
+        rot_requires_grad = [
+            True] * n_objects if rot_requires_grad is None else rot_requires_grad
+
+        # Pos/Ori features to either specific value or "ignore" by default
+        obj_pos_feats = []
+        obj_rot_feats = []
+        obj_rot_offsets = []
+        for i in range(n_objects):
+            # Position
+            if pos_obj_types[i] == Params.REPEL_IDX:
+                obj_pos_feats.append(detach_tensor(pos_repel_feat))
+            elif pos_obj_types[i] == Params.ATTRACT_IDX:
+                obj_pos_feats.append(detach_tensor(pos_attract_feat))
+            else:  # None
+                obj_pos_feats.append(detach_tensor(self.pos_ignore_feat))
+
+            obj_pos_feats[-1].requires_grad = pos_requires_grad[i]
+
+            # Rotation
+            if rot_obj_types[i] == Params.CARE_ROT_IDX:
+                obj_rot_feats.append(detach_tensor(rot_care_feat))
+            else:  # IGNORE_ROT_IDX or None
+                # if type not specified, just initialize as "ignore"
+                obj_rot_feats.append(detach_tensor(self.rot_ignore_feat))
+            obj_rot_feats[-1].requires_grad = rot_requires_grad[i]
+
+            # Rotation offset
+            # initialized as "0" which the start feature represents due to training
+            obj_rot_offsets.append(detach_tensor(
+                self.policy_network.rot_offsets_train[Params.START_IDX].data))
+            obj_rot_offsets[-1].requires_grad = rot_requires_grad[i]
+
+        # Save newly initialized object preference features/offsets
+        # also append start and/or goal features with requires_grad=False to freeze them
+        self.update_obj_feats(obj_pos_feats=obj_pos_feats,
+                              obj_rot_feats=obj_rot_feats, obj_rot_offsets=obj_rot_offsets,
+                              same_var=False)
 
     def add_new_obj(self):
         # Add new "neutral" object features for new object

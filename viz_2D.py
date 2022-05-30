@@ -16,8 +16,9 @@ import matplotlib.pyplot as plt
 import matplotlib.colors as mcolors
 
 import torch
+from learn2learn import LearnedOptimizer
 
-from train import perform_adaptation, perform_adaptation_rls, DEVICE
+from online_adaptation import perform_adaptation, perform_adaptation_rls, perform_adaptation_learn2learn, DEVICE
 from elastic_band import Object
 from data_params import Params
 from model import Policy, PolicyNetwork, pose_to_model_input, decode_ori
@@ -408,7 +409,9 @@ def viz_adaptation(policy: Policy, test_data_root: str, train_pos, train_rot, ad
         num_objects = len(object_types)
         # NOTE: rather, object indices should be actual indices, not types
         object_idxs = np.arange(num_objects)
-        batch_data = (expert_traj, start, goal, goal_radius,
+
+        # (traj, goals_r, objs, objs_r, obj_idxs)
+        batch_data = (expert_traj, goal_radius,
                       # repeat for T timesteps unless object can move
                       object_poses[np.newaxis, :, :].repeat(T, axis=0),
                       object_radii[np.newaxis, :, np.newaxis].repeat(
@@ -484,6 +487,8 @@ def parse_arguments():
                         help="Use rls to adapt object features.")
     parser.add_argument('--use_learn2learn', action='store_true',
                         help="Use Learn2learn to adapt object features.")
+    parser.add_argument('--learn2learn_name', action='store',
+                        type=str, help="trained learned optimizer")
     return parser.parse_args()
 
 
@@ -522,11 +527,24 @@ if __name__ == '__main__':
                 rls=rls, *args, **kwargs)
         elif args.use_learn2learn:
             print("Using Learn2Learn to adapt object features.")
-            adaptation_func = perform_adaptation_learn2learn
+            learned_opt = LearnedOptimizer(device=DEVICE, max_steps=2)
+            learned_opt.to(DEVICE)
+            learned_opt.train()
+
+            if args.learn2learn_name is not None:
+                learned_opt.load_state_dict(
+                    torch.load(os.path.join(Params.model_root, args.model_name, args.learn2learn_name)))
+            else:
+                print(
+                    "WARNING: No learned optimizer name provided. Using random init weights!")
+
+            adaptation_func = lambda *args, **kwargs: perform_adaptation_learn2learn(
+                learned_opt=learned_opt, *args, **kwargs)
         else:
             print("Using Adam SGD to adapt object features.")
-            adaptation_func = perform_adaptation
+            adaptation_func = perform_adaptation  # detach_obj_feats
 
+        torch.autograd.set_detect_anomaly(True)
         viz_adaptation(policy, test_data_root,
                        train_pos=args.calc_pos, train_rot=args.calc_rot,
                        adaptation_func=adaptation_func)

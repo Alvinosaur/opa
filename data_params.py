@@ -37,7 +37,8 @@ class Params:
     IGNORE_ROT_IDX = REPEL_IDX = 0
     CARE_ROT_IDX = ATTRACT_IDX = 1
     object_alphas = np.array([-0.3, 0.3])  # (REPEL_IDX, ATTRACT_IDX)
-    ori_offsets_2D = np.array([0, np.pi / 2, 0, 0])  # (IGNORE_ROT_IDX, CARE_ROT_IDX, start, goal)
+    # (IGNORE_ROT_IDX, CARE_ROT_IDX, start, goal)
+    ori_offsets_2D = np.array([0, np.pi / 2, 0, 0])
     ori_offsets_3D = np.vstack([
         # (IGNORE_ROT_IDX)
         # This is arbitrary since rotation is ignored
@@ -71,7 +72,7 @@ class Params:
     object_radii_std_3D = object_radii_mu_3D / 8
 
     max_steps = 100
-    dstep_2D = dstep_3D = np.linalg.norm(ub_2D) / max_steps
+    dstep_2D = dstep_3D = float(np.linalg.norm(ub_2D) / max_steps)
     dtheta = np.pi / 30  # (or pi/2 / 5
 
     model_root = "saved_model_files"
