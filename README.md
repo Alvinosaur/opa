@@ -12,7 +12,7 @@ method, OPA can naturally handle changes to the environment and object poses.
 Please clone this repository using recursive clone to obtain the correct
 submoduled libraries.
 ```
-git clone --recurse-submodules <insert this repo http/ssh>
+git clone --recurse-submodules git@github.com:Alvinosaur/opa.git
 ```
 Next, install both the requirements of this repository and the submodules.
 ```
