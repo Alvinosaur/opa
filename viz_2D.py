@@ -544,7 +544,6 @@ if __name__ == '__main__':
             print("Using Adam SGD to adapt object features.")
             adaptation_func = perform_adaptation  # detach_obj_feats
 
-        torch.autograd.set_detect_anomaly(True)
         viz_adaptation(policy, test_data_root,
                        train_pos=args.calc_pos, train_rot=args.calc_rot,
                        adaptation_func=adaptation_func)

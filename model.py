@@ -619,6 +619,7 @@ class Policy(object):
         #   because perform_adaptation() in train.py only defines Adam optimizer
         #   using params from self.adaptable_parameters that have requires_grad=True
         self.policy_network = policy_network
+        self.device = policy_network.device
 
         pos_repel_feat = self.policy_network.pos_pref_feat_train[Params.REPEL_IDX].detach(
         )
@@ -714,7 +715,7 @@ class Policy(object):
     def init_new_objs(self, pos_obj_types: List[Union[int, None]],
                       rot_obj_types: List[Union[int, None]], rot_offsets=None,
                       pos_requires_grad=None, rot_requires_grad=None,
-                      rot_offset_requires_grad=None):
+                      rot_offset_requires_grad=None, use_rand_init=False):
         pos_repel_feat = self.policy_network.pos_pref_feat_train[Params.REPEL_IDX].detach(
         )
         pos_attract_feat = self.policy_network.pos_pref_feat_train[Params.ATTRACT_IDX].detach(
@@ -740,7 +741,10 @@ class Policy(object):
                 obj_pos_feats.append(detach_tensor(pos_repel_feat))
             elif pos_obj_types[i] == Params.ATTRACT_IDX:
                 obj_pos_feats.append(detach_tensor(pos_attract_feat))
-            else:  # None
+            elif use_rand_init:  # None
+                obj_pos_feats.append(torch.randn(
+                    self.pos_ignore_feat.shape, device=self.device))
+            else:
                 obj_pos_feats.append(detach_tensor(self.pos_ignore_feat))
 
             obj_pos_feats[-1].requires_grad = pos_requires_grad[i]
@@ -748,6 +752,9 @@ class Policy(object):
             # Rotation
             if rot_obj_types[i] == Params.CARE_ROT_IDX:
                 obj_rot_feats.append(detach_tensor(rot_care_feat))
+            elif use_rand_init:
+                obj_rot_feats.append(torch.randn(
+                    self.rot_ignore_feat.shape, device=self.device))
             else:  # IGNORE_ROT_IDX or None
                 # if type not specified, just initialize as "ignore"
                 obj_rot_feats.append(detach_tensor(self.rot_ignore_feat))
@@ -757,6 +764,9 @@ class Policy(object):
             # initialized as "0" which the start feature represents due to training
             if rot_offsets is not None and rot_offsets[i] is not None:
                 obj_rot_offsets.append(detach_tensor(rot_offsets[i]))
+            elif use_rand_init:
+                obj_rot_offsets.append(torch.randn(
+                    self.policy_network.rot_offsets_train[Params.START_IDX].shape, device=self.device))
             else:
                 obj_rot_offsets.append(detach_tensor(
                     self.policy_network.rot_offsets_train[Params.START_IDX].data))

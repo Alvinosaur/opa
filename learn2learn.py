@@ -1,10 +1,9 @@
-from ast import Assert
 import os
-from sqlite3 import adapt
 import numpy as np
 import copy
 import argparse
 import json
+from pytest import param
 from tqdm import tqdm
 import shutil
 import matplotlib.pyplot as plt
@@ -18,12 +17,6 @@ from data_params import Params
 from model import PolicyNetwork, Policy
 from train import load_batch, cuda, DEVICE
 from online_adaptation import perform_adaptation_learn2learn
-
-
-def w(v):
-    if cuda:
-        return v.cuda()
-    return v
 
 
 def detach_var(v):
@@ -61,6 +54,7 @@ class LearnedOptimizer(nn.Module):
         self.hidden_dim = hidden_dim
         self.tgt_lr = tgt_lr
         self.training = training
+        self.param_dim = param_dim
         self.recurs = nn.LSTMCell(param_dim, hidden_dim)
         self.recurs2 = nn.LSTMCell(hidden_dim, hidden_dim)
         self.output = nn.Linear(hidden_dim, param_dim)
@@ -100,7 +94,7 @@ class LearnedOptimizer(nn.Module):
             # Initialize hidden and cell states
             self.param_size = sum(p.numel() for p in params)
             zero_init = [
-                w(Variable(torch.zeros(self.param_size, self.hidden_dim, device=self.device))) for _ in range(2)]
+                Variable(torch.zeros(self.param_size, self.hidden_dim, device=self.device)) for _ in range(2)]
             self.hidden_states = copy.deepcopy(zero_init)
             self.hidden_states_temp = copy.deepcopy(zero_init)
             self.cell_states = copy.deepcopy(zero_init)
@@ -112,16 +106,25 @@ class LearnedOptimizer(nn.Module):
 
         offset = 0
         new_params = []
-        for p in params:
+        for pi, p in enumerate(params):
             cur_sz = p.numel()
             # p_indices: [offset:offset + cur_sz]
-            p_indices = torch.arange(offset, offset + cur_sz, device=DEVICE)
+            if self.param_dim == 1:
+                p_indices = torch.arange(
+                    offset, offset + cur_sz, device=DEVICE)
+            else:
+                p_indices = torch.arange(pi, pi+1, device=DEVICE)
 
             # Get original gradients and feed as input to learned optimizer
             try:
                 if p.grad is None:
                     raise GradIsNoneError()
-                gradients = detach_var(p.grad.view(cur_sz, 1))
+                gradients = detach_var(p.grad)
+                if self.param_dim == 1:
+                    gradients = gradients.view(cur_sz, 1)  # separate batches
+                else:
+                    gradients = gradients.view(1, cur_sz)
+
                 updates = self.forward(gradients, p_indices)
             except GradIsNoneError:
                 # No gradients??
@@ -175,27 +178,34 @@ def train_helper(policy: Policy, learned_opt: LearnedOptimizer, batch_data, trai
     pos_obj_types = [None] * num_objects  # None means no pos preference
     pos_requires_grad = [train_pos] * num_objects
 
-    # rot_obj_types = [None] * num_objects  # None means no rot preference
-    # rot_requires_grad = [True] * num_objects
-    # rot_offset_requires_grad = [False] * num_objects  # CUSTOM EXPERIMENT!!!
-    # rot_offsets = torch.from_numpy(
-    # Params.ori_offsets_2D).float().to(DEVICE)
-    # if len(rot_offsets.shape) == 1:
-    # rot_offsets = rot_offsets.unsqueeze(-1)
-
-    rot_obj_types = [Params.IGNORE_ROT_IDX, Params.CARE_ROT_IDX]
-    rot_requires_grad = [False] * num_objects
-    rot_offset_requires_grad = [True] * num_objects
-    rot_offsets = [None] * num_objects
+    if train_rot:
+        if np.random.random() < 0.5:
+            rot_obj_types = [Params.IGNORE_ROT_IDX, Params.CARE_ROT_IDX]
+            rot_requires_grad = [False] * num_objects
+            rot_offset_requires_grad = [True] * num_objects
+            rot_offsets = [None] * num_objects
+        else:
+            # None means no rot preference
+            rot_obj_types = [None] * num_objects
+            rot_requires_grad = [True] * num_objects
+            rot_offset_requires_grad = [False] * \
+                num_objects  # CUSTOM EXPERIMENT!!!
+            rot_offsets = torch.from_numpy(
+                Params.ori_offsets_2D).float().to(DEVICE)
+            if len(rot_offsets.shape) == 1:
+                rot_offsets = rot_offsets.unsqueeze(-1)
+    else:
+        rot_obj_types = [None] * num_objects
+        rot_requires_grad = [False] * num_objects
+        rot_offsets = None
+        rot_offset_requires_grad = None
 
     policy.init_new_objs(pos_obj_types=pos_obj_types,
                          rot_obj_types=rot_obj_types,
                          rot_offsets=rot_offsets,
                          pos_requires_grad=pos_requires_grad, rot_requires_grad=rot_requires_grad,
-                         rot_offset_requires_grad=rot_offset_requires_grad)
-
-    # Reset hidden states of learned_opt
-    learned_opt.reset_lstm()
+                         rot_offset_requires_grad=rot_offset_requires_grad,
+                         use_rand_init=False)
 
     losses, _ = perform_adaptation_learn2learn(policy, learned_opt, batch_data,
                                                train_pos=train_pos, train_rot=train_rot,
@@ -256,8 +266,8 @@ def train(policy: Policy, learned_opt: LearnedOptimizer, train_args, saved_root:
     for epoch in range(num_epochs):
         np.random.shuffle(train_pos_indices)
         np.random.shuffle(train_rot_indices)
-        batch_pos_losses = np.zeros(adapt_kwargs["n_adapt_iters"])
-        batch_rot_losses = np.zeros(adapt_kwargs["n_adapt_iters"])
+        epoch_pos_losses = np.zeros(adapt_kwargs["n_adapt_iters"])
+        epoch_rot_losses = np.zeros(adapt_kwargs["n_adapt_iters"])
 
         # Train
         policy.policy_network.eval()
@@ -265,50 +275,50 @@ def train(policy: Policy, learned_opt: LearnedOptimizer, train_args, saved_root:
 
         for b in (range(num_train_batches)):
             # Position parameter adaptation
-            # pos_indices = train_pos_indices[b *
-            #                                 batch_size:(b + 1) * batch_size]
-            # pos_batch_data = load_batch(train_pos_dataset, pos_indices)
-            # pos_losses = train_helper(
-            #     policy, learned_opt, pos_batch_data, train_pos=True, train_rot=False, adapt_kwargs=adapt_kwargs)
-            # batch_pos_losses += pos_losses
+            pos_batch_indices = train_pos_indices[b *
+                                                  batch_size:(b + 1) * batch_size]
+            pos_batch_data = load_batch(train_pos_dataset, pos_batch_indices)
+            pos_losses = train_helper(
+                policy, learned_opt, pos_batch_data, train_pos=True, train_rot=False, adapt_kwargs=adapt_kwargs)
+            epoch_pos_losses += pos_losses
 
             # Rotation parameter adaptation
-            rot_indices = train_rot_indices[b *
-                                            batch_size:(b + 1) * batch_size]
-            rot_batch_data = load_batch(train_rot_dataset, rot_indices)
+            rot_batch_indices = train_rot_indices[b *
+                                                  batch_size:(b + 1) * batch_size]
+            rot_batch_data = load_batch(train_rot_dataset, rot_batch_indices)
             rot_losses = train_helper(
                 policy, learned_opt, rot_batch_data, train_pos=False, train_rot=True, adapt_kwargs=adapt_kwargs)
-            batch_rot_losses += rot_losses
+            epoch_rot_losses += rot_losses
             pbar.update(1)
 
             if b % 10 == 0:
-                print(batch_pos_losses / (b + 1))
-                print(batch_rot_losses / (b + 1))
+                print(epoch_pos_losses / (b + 1))
+                print(epoch_rot_losses / (b + 1))
 
-        avg_batch_pos_losses = batch_pos_losses / num_train_batches
-        avg_batch_rot_losses = batch_rot_losses / num_train_batches
+            if b == 10 and epoch == 0:
+                # Optionally save copy of all relevant scripts/files for reproducibility
+                os.mkdir(saved_root)
+                shutil.copy("model.py", os.path.join(saved_root, "model.py"))
+                shutil.copy("data_params.py", os.path.join(
+                    saved_root, "data_params.py"))
+                shutil.copy("train.py", os.path.join(saved_root, "train.py"))
+                shutil.copy("learn2learn.py", os.path.join(
+                    saved_root, "learn2learn.py"))
+                shutil.copy("online_adaptation.py", os.path.join(
+                    saved_root, "online_adaptation.py"))
+
+                # Save train args
+                with open(os.path.join(saved_root, f"train_args.json"), "w") as outfile:
+                    json.dump(vars(train_args), outfile, indent=4)
+
+        avg_epoch_pos_losses = epoch_pos_losses / num_train_batches
+        avg_epoch_rot_losses = epoch_rot_losses / num_train_batches
         print("Avg pos loss vs updates")
-        print(avg_batch_pos_losses)
+        print(avg_epoch_pos_losses)
         print("Avg rot loss vs updates")
-        print(avg_batch_rot_losses)
-        all_pos_losses.append(avg_batch_pos_losses)
-        all_rot_losses.append(avg_batch_rot_losses)
-
-        if epoch == 0:
-            # Optionally save copy of all relevant scripts/files for reproducibility
-            os.mkdir(saved_root)
-            shutil.copy("model.py", os.path.join(saved_root, "model.py"))
-            shutil.copy("data_params.py", os.path.join(
-                saved_root, "data_params.py"))
-            shutil.copy("train.py", os.path.join(saved_root, "train.py"))
-            shutil.copy("learn2learn.py", os.path.join(
-                saved_root, "learn2learn.py"))
-            shutil.copy("online_adaptation.py", os.path.join(
-                saved_root, "online_adaptation.py"))
-
-            # Save train args
-            with open(os.path.join(saved_root, f"train_args.json"), "w") as outfile:
-                json.dump(vars(train_args), outfile, indent=4)
+        print(avg_epoch_rot_losses)
+        all_pos_losses.append(avg_epoch_pos_losses)
+        all_rot_losses.append(avg_epoch_rot_losses)
 
         if epoch % epochs_per_save == 0:
             torch.save(learned_opt.state_dict(), os.path.join(
@@ -376,6 +386,7 @@ if __name__ == "__main__":
                             device=DEVICE).to(DEVICE)
     network.load_state_dict(
         torch.load(os.path.join(Params.model_root, opt_args.model_name, "model_%d.h5" % opt_args.loaded_epoch)))
+    network.to(DEVICE)
     policy = Policy(network)
 
     learned_opt = LearnedOptimizer(
@@ -386,7 +397,8 @@ if __name__ == "__main__":
     n_adapt_iters = opt_args.max_steps
     # dist of each rollout step of policy
     dstep = Params.dstep_3D if is_3D else Params.dstep_2D
-    adapt_kwargs = dict(n_adapt_iters=n_adapt_iters, dstep=dstep,)
+    adapt_kwargs = dict(n_adapt_iters=n_adapt_iters,
+                        dstep=dstep, clip_params=False)
 
     # Run training
     # torch.autograd.set_detect_anomaly(True)
