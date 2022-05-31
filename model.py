@@ -711,8 +711,10 @@ class Policy(object):
             self.obj_pos_feats, self.obj_rot_feats, self.obj_rot_offsets, same_var=False)
         self.policy_network.zero_grad()
 
-    def init_new_objs(self, pos_obj_types: List[Union[int, None]], rot_obj_types: List[Union[int, None]],
-                      pos_requires_grad=None, rot_requires_grad=None):
+    def init_new_objs(self, pos_obj_types: List[Union[int, None]],
+                      rot_obj_types: List[Union[int, None]], rot_offsets=None,
+                      pos_requires_grad=None, rot_requires_grad=None,
+                      rot_offset_requires_grad=None):
         pos_repel_feat = self.policy_network.pos_pref_feat_train[Params.REPEL_IDX].detach(
         )
         pos_attract_feat = self.policy_network.pos_pref_feat_train[Params.ATTRACT_IDX].detach(
@@ -726,6 +728,7 @@ class Policy(object):
             True] * n_objects if pos_requires_grad is None else pos_requires_grad
         rot_requires_grad = [
             True] * n_objects if rot_requires_grad is None else rot_requires_grad
+        rot_offset_requires_grad = rot_requires_grad if rot_offset_requires_grad is None else rot_offset_requires_grad
 
         # Pos/Ori features to either specific value or "ignore" by default
         obj_pos_feats = []
@@ -752,9 +755,12 @@ class Policy(object):
 
             # Rotation offset
             # initialized as "0" which the start feature represents due to training
-            obj_rot_offsets.append(detach_tensor(
-                self.policy_network.rot_offsets_train[Params.START_IDX].data))
-            obj_rot_offsets[-1].requires_grad = rot_requires_grad[i]
+            if rot_offsets is not None and rot_offsets[i] is not None:
+                obj_rot_offsets.append(detach_tensor(rot_offsets[i]))
+            else:
+                obj_rot_offsets.append(detach_tensor(
+                    self.policy_network.rot_offsets_train[Params.START_IDX].data))
+            obj_rot_offsets[-1].requires_grad = rot_offset_requires_grad[i]
 
         # Save newly initialized object preference features/offsets
         # also append start and/or goal features with requires_grad=False to freeze them

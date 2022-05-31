@@ -148,16 +148,16 @@ def adaptation_loss(model: PolicyNetwork, batch_data: List[Tuple], dstep,
         loss = loss + pos_loss
 
     if train_rot:
-        output_ori = pred_traj[:, :out_T, pos_dim:].squeeze(0)
-        target_ori = traj_tensors[:, :out_T, pos_dim:].squeeze(0)
+        output_ori = pred_traj[:, :out_T, pos_dim:]
+        target_ori = traj_tensors[:, :out_T, pos_dim:]
         if pos_dim == 2:
             theta_loss = (1 - torch.einsum("bik,bik->bi",
                           output_ori, target_ori)).mean()
         else:
-            output_x = output_ori[:, 0:3]
-            output_y = output_ori[:, 3:6]
-            tgt_x = target_ori[:, 0:3]
-            tgt_y = target_ori[:, 3:6]
+            output_x = output_ori[:, :, 0:3]
+            output_y = output_ori[:, :, 3:6]
+            tgt_x = target_ori[:, :, 0:3]
+            tgt_y = target_ori[:, :, 3:6]
             theta_loss = ((1 - torch.einsum("bik,bik->bi",
                           output_x, tgt_x)).mean() +
                           (1 - torch.einsum("bik,bik->bi",

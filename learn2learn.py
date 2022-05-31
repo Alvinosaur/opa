@@ -44,7 +44,7 @@ class LearnedOptimizer(nn.Module):
     learned position and rotation preferences as well as rotation offsets.
     """
 
-    def __init__(self, device, preproc=False, hidden_dim=20, preproc_factor=10.0,
+    def __init__(self, device, hidden_dim=20, param_dim=1,
                  max_steps=5, opt_lr=1e-3, tgt_lr=1e-1, training=False):
         """
         :param n_params: number of parameters to optimize
@@ -61,15 +61,9 @@ class LearnedOptimizer(nn.Module):
         self.hidden_dim = hidden_dim
         self.tgt_lr = tgt_lr
         self.training = training
-        if preproc:
-            self.recurs = nn.LSTMCell(2, hidden_dim)
-        else:
-            self.recurs = nn.LSTMCell(1, hidden_dim)
+        self.recurs = nn.LSTMCell(param_dim, hidden_dim)
         self.recurs2 = nn.LSTMCell(hidden_dim, hidden_dim)
-        self.output = nn.Linear(hidden_dim, 1)
-        self.preproc = preproc
-        self.preproc_factor = preproc_factor
-        self.preproc_threshold = np.exp(-preproc_factor)
+        self.output = nn.Linear(hidden_dim, param_dim)
 
         # filled in on the first call to step()
         self.param_size = None
@@ -86,25 +80,6 @@ class LearnedOptimizer(nn.Module):
 
     def forward(self, inp, p_indices):
         assert self.hidden_states is not None, "Must call step() first!"
-        if self.preproc:
-            # Implement preproc described in Appendix A
-
-            # Note: we do all this work on tensors, which means
-            # the gradients won't propagate through inp. This
-            # should be ok because the algorithm involves
-            # making sure that inp is already detached.
-            inp = inp.data
-            inp2 = torch.zeros(inp.size()[0], 2, device=self.device)
-            keep_grads = (torch.abs(inp) >= self.preproc_threshold).squeeze()
-            inp2[:, 0][keep_grads] = (
-                torch.log(torch.abs(inp[keep_grads]) + 1e-8) / self.preproc_factor).squeeze()
-            inp2[:, 1][keep_grads] = torch.sign(inp[keep_grads]).squeeze()
-
-            inp2[:, 0][~keep_grads] = -1
-            inp2[:, 1][~keep_grads] = (
-                float(np.exp(self.preproc_factor)) * inp[~keep_grads]).squeeze()
-            inp = Variable(inp2)
-
         hidden0, cell0 = self.recurs(
             inp, (self.hidden_states[0][p_indices], self.cell_states[0][p_indices]))
         hidden1, cell1 = self.recurs2(
@@ -199,10 +174,25 @@ def train_helper(policy: Policy, learned_opt: LearnedOptimizer, batch_data, trai
     # Reset learned object features for objects
     pos_obj_types = [None] * num_objects  # None means no pos preference
     pos_requires_grad = [train_pos] * num_objects
-    rot_obj_types = [None] * num_objects  # None means no rot preference
-    rot_requires_grad = [train_rot] * num_objects
-    policy.init_new_objs(pos_obj_types=pos_obj_types, rot_obj_types=rot_obj_types,
-                         pos_requires_grad=pos_requires_grad, rot_requires_grad=rot_requires_grad)
+
+    # rot_obj_types = [None] * num_objects  # None means no rot preference
+    # rot_requires_grad = [True] * num_objects
+    # rot_offset_requires_grad = [False] * num_objects  # CUSTOM EXPERIMENT!!!
+    # rot_offsets = torch.from_numpy(
+    # Params.ori_offsets_2D).float().to(DEVICE)
+    # if len(rot_offsets.shape) == 1:
+    # rot_offsets = rot_offsets.unsqueeze(-1)
+
+    rot_obj_types = [Params.IGNORE_ROT_IDX, Params.CARE_ROT_IDX]
+    rot_requires_grad = [False] * num_objects
+    rot_offset_requires_grad = [True] * num_objects
+    rot_offsets = [None] * num_objects
+
+    policy.init_new_objs(pos_obj_types=pos_obj_types,
+                         rot_obj_types=rot_obj_types,
+                         rot_offsets=rot_offsets,
+                         pos_requires_grad=pos_requires_grad, rot_requires_grad=rot_requires_grad,
+                         rot_offset_requires_grad=rot_offset_requires_grad)
 
     # Reset hidden states of learned_opt
     learned_opt.reset_lstm()
@@ -250,7 +240,7 @@ def train(policy: Policy, learned_opt: LearnedOptimizer, train_args, saved_root:
         root=f"data/rot_{str_3D}_train", buffer_size=buffer_size)
 
     batch_size = train_args.batch_size
-    num_epochs = 5
+    num_epochs = 3
     epochs_per_save = 1
 
     # Update over both pos and rot data one-by-one
@@ -275,12 +265,12 @@ def train(policy: Policy, learned_opt: LearnedOptimizer, train_args, saved_root:
 
         for b in (range(num_train_batches)):
             # Position parameter adaptation
-            pos_indices = train_pos_indices[b *
-                                            batch_size:(b + 1) * batch_size]
-            pos_batch_data = load_batch(train_pos_dataset, pos_indices)
-            pos_losses = train_helper(
-                policy, learned_opt, pos_batch_data, train_pos=True, train_rot=False, adapt_kwargs=adapt_kwargs)
-            batch_pos_losses += pos_losses
+            # pos_indices = train_pos_indices[b *
+            #                                 batch_size:(b + 1) * batch_size]
+            # pos_batch_data = load_batch(train_pos_dataset, pos_indices)
+            # pos_losses = train_helper(
+            #     policy, learned_opt, pos_batch_data, train_pos=True, train_rot=False, adapt_kwargs=adapt_kwargs)
+            # batch_pos_losses += pos_losses
 
             # Rotation parameter adaptation
             rot_indices = train_rot_indices[b *
@@ -292,8 +282,8 @@ def train(policy: Policy, learned_opt: LearnedOptimizer, train_args, saved_root:
             pbar.update(1)
 
             if b % 10 == 0:
-                print(batch_pos_losses / (b+1))
-                print(batch_rot_losses / (b+1))
+                print(batch_pos_losses / (b + 1))
+                print(batch_rot_losses / (b + 1))
 
         avg_batch_pos_losses = batch_pos_losses / num_train_batches
         avg_batch_rot_losses = batch_rot_losses / num_train_batches
@@ -389,7 +379,7 @@ if __name__ == "__main__":
     policy = Policy(network)
 
     learned_opt = LearnedOptimizer(
-        device=DEVICE, max_steps=opt_args.max_steps, hidden_dim=opt_args.hidden_dim)
+        device=DEVICE, max_steps=opt_args.max_steps, hidden_dim=opt_args.hidden_dim)  # param_dim=4
     learned_opt.to(DEVICE)
 
     # Set K-shot adaptation K = max_steps, meaning that learned optimizer only performs its own gradient update once per sample
