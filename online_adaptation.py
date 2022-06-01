@@ -10,6 +10,13 @@ from recursive_least_squares.rls import RLS
 from train import process_batch_data, DEVICE
 
 
+def write_log(log_file, string):
+    print(string)
+    if log_file is not None:
+        log_file.write(string+'\n')
+        log_file.flush()
+
+
 def model_rollout(goal_tensors, current_inputs, start_tensors, goal_rot_inputs,
                   object_inputs, obj_idx_tensors,
                   intervention_traj,
@@ -165,7 +172,8 @@ def perform_adaptation(policy: Policy, batch_data: List[Tuple],
                        train_pos: bool, train_rot: bool,
                        n_adapt_iters: int, dstep: float,
                        verbose=False, clip_params=True,
-                       Optimizer=torch.optim.Adam, lr=1e-1):
+                       Optimizer=torch.optim.Adam, lr=1e-1,
+                       log_file=None):
     """
     Adapts the policy to the batch of human intervention data.
     :param policy: Policy to adapt
@@ -189,7 +197,7 @@ def perform_adaptation(policy: Policy, batch_data: List[Tuple],
         if p.requires_grad:
             adaptable_parameters.append(p)
             if verbose:
-                print("Original p: ", p)
+                write_log(log_file, f"Original p: {p}")
 
     optimizer = Optimizer(adaptable_parameters, lr=lr)
     losses = []
@@ -203,7 +211,7 @@ def perform_adaptation(policy: Policy, batch_data: List[Tuple],
                                               dstep=dstep)
         return [loss.item()], pred_traj
 
-    for iteration in tqdm(range(n_adapt_iters)):
+    for iteration in (range(n_adapt_iters)):
         loss, pred_traj = adaptation_loss(model=policy.policy_network,
                                           batch_data_processed=batch_data_processed,
                                           train_pos=train_pos, train_rot=train_rot,
@@ -213,11 +221,13 @@ def perform_adaptation(policy: Policy, batch_data: List[Tuple],
         loss.backward()
         if verbose:
             for p in adaptable_parameters:
-                print("p.grad: ", p.grad)
+                write_log(
+                    log_file, f"iter {iteration} p: {p}, p.grad: {p.grad}")
 
         optimizer.step()
         if verbose:
-            print("iter %d loss: %.3f" % (iteration + 1, loss.item()))
+            write_log(log_file, "iter %d loss: %.3f" %
+                      (iteration + 1, loss.item()))
 
     # Clip learned features within expected range
     if clip_params:
@@ -229,7 +239,8 @@ def perform_adaptation(policy: Policy, batch_data: List[Tuple],
 def perform_adaptation_rls(policy: Policy, rls: RLS, batch_data: List[Tuple],
                            train_pos: bool, train_rot: bool,
                            n_adapt_iters: int, dstep: float,
-                           verbose=False, clip_params=True):
+                           verbose=False, clip_params=True,
+                           log_file=None):
     """
     Recursive Least Squares Adaptation
     """
@@ -242,7 +253,7 @@ def perform_adaptation_rls(policy: Policy, rls: RLS, batch_data: List[Tuple],
         if p.requires_grad:
             adaptable_parameters.append(p)
             if verbose:
-                print("Original p: ", p)
+                write_log(log_file, f"Original p: {p}")
 
     losses = []
     pred_traj = None
@@ -285,21 +296,22 @@ def perform_adaptation_rls(policy: Policy, rls: RLS, batch_data: List[Tuple],
         yhat = pred_traj[:, :, left:right]
 
         # RLS is slow, so only calculate loss for subset of traj
-        # error = torch.norm(y - yhat, dim=2)[0]
-        # rand_indices = torch.argsort(error, descending=True)
+        error = torch.norm(y - yhat, dim=2)[0]
+        rand_indices = torch.argsort(error, descending=True)[:10]
         # rand_indices = torch.randint(low=0, high=out_T, size=(15,))
-        # y_sampled = y[:, rand_indices, :]
-        # yhat_sampled = yhat[:, rand_indices, :]
-        y_sampled = y
-        yhat_sampled = yhat
+        y_sampled = y[:, rand_indices, :]
+        yhat_sampled = yhat[:, rand_indices, :]
+        # y_sampled = y
+        # yhat_sampled = yhat
 
         rls.update(y=y_sampled, yhat=yhat_sampled, thetas=adaptable_parameters)
 
         loss = torch.norm(y - yhat, dim=2).mean()
         losses.append(loss.item())
         if verbose:
-            print("iter %d loss: %.3f" % (iteration + 1, loss.item()))
-            print("params: ", adaptable_parameters)
+            write_log(log_file, "iter %d loss: %.3f" %
+                      (iteration + 1, loss.item()))
+            write_log(log_file, f"params: {adaptable_parameters}")
 
     # Clip learned features within expected range
     if clip_params:
@@ -312,7 +324,7 @@ def perform_adaptation_learn2learn(policy: Policy, learned_opt, batch_data: List
                                    train_pos: bool, train_rot: bool,
                                    n_adapt_iters: int, dstep: float,
                                    verbose=False, clip_params=True,
-                                   reset_lstm=True):
+                                   reset_lstm=True, log_file=None):
     """
     learned_opt: LearnedOptimizer from learn2learn.py
     """
@@ -336,7 +348,7 @@ def perform_adaptation_learn2learn(policy: Policy, learned_opt, batch_data: List
                                               dstep=dstep)
         return [loss.item()], pred_traj
 
-    for iteration in tqdm(range(1, n_adapt_iters+1)):
+    for iteration in (range(1, n_adapt_iters+1)):
         loss, pred_traj = adaptation_loss(model=policy.policy_network,
                                           batch_data_processed=batch_data_processed,
                                           train_pos=train_pos, train_rot=train_rot,
@@ -354,7 +366,9 @@ def perform_adaptation_learn2learn(policy: Policy, learned_opt, batch_data: List
         params = [p for p in policy.adaptable_parameters if p.requires_grad]
 
         if verbose:
-            print("iter %d loss: %.3f" % (iteration + 1, loss.item()))
+            write_log(log_file, "iter %d loss: %.3f" %
+                      (iteration + 1, loss.item()))
+            write_log(log_file, f"params: {params}")
 
     # Clip learned features within expected range
     if clip_params:

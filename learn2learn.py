@@ -283,12 +283,13 @@ def train(policy: Policy, learned_opt: LearnedOptimizer, train_args, saved_root:
             epoch_pos_losses += pos_losses
 
             # Rotation parameter adaptation
-            rot_batch_indices = train_rot_indices[b *
-                                                  batch_size:(b + 1) * batch_size]
-            rot_batch_data = load_batch(train_rot_dataset, rot_batch_indices)
-            rot_losses = train_helper(
-                policy, learned_opt, rot_batch_data, train_pos=False, train_rot=True, adapt_kwargs=adapt_kwargs)
-            epoch_rot_losses += rot_losses
+            # rot_batch_indices = train_rot_indices[b *
+            #                                       batch_size:(b + 1) * batch_size]
+            # rot_batch_data = load_batch(train_rot_dataset, rot_batch_indices)
+            # rot_losses = train_helper(
+            #     policy, learned_opt, rot_batch_data, train_pos=False, train_rot=True, adapt_kwargs=adapt_kwargs)
+            # epoch_rot_losses += rot_losses
+
             pbar.update(1)
 
             if b % 10 == 0:

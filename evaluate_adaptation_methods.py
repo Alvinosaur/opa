@@ -17,7 +17,7 @@ from learn2learn import LearnedOptimizer
 from dataset import Dataset
 
 
-def evaluate_helper(policy: Policy, adaptation_func, batch_data, train_pos, train_rot, n_adapt_iters, dstep):
+def evaluate_helper(policy: Policy, adaptation_func, batch_data, train_pos, train_rot, n_adapt_iters, dstep, log_file):
     (traj, goal_radius, obj_poses, obj_radii, obj_types) = batch_data[0]
     # num_objects = len(obj_types)  # fails when rot data can contain "care" or "ignore" objects, but only one object in a given scene
     num_objects = 2  # (Attract, Repel pos) or (Care, Ignore rot)
@@ -39,9 +39,10 @@ def evaluate_helper(policy: Policy, adaptation_func, batch_data, train_pos, trai
                          use_rand_init=False)
 
     losses, _ = adaptation_func(policy=policy, batch_data=batch_data,
-                                train_pos=train_pos, train_rot=train_pos,
+                                train_pos=train_pos, train_rot=train_rot,
                                 n_adapt_iters=n_adapt_iters, dstep=dstep,
-                                clip_params=False)
+                                clip_params=False, verbose=True,
+                                log_file=log_file)
     return losses
 
 
@@ -59,8 +60,9 @@ def evaluate_adaptation(policy: Policy, adaptation_func, dstep,
     :return:
     """
     # Update over both pos and rot data one-by-one
-    batch_size = 64
-    min_len = min(len(pos_dataset), len(rot_dataset))
+    batch_size = 16
+    # min_len = min(len(pos_dataset), len(rot_dataset))
+    min_len = 64  # TODO: temporary
     pos_indices = np.arange(min_len)
     rot_indices = np.arange(min_len)
     num_batches = min_len // batch_size
@@ -69,6 +71,8 @@ def evaluate_adaptation(policy: Policy, adaptation_func, dstep,
     sum_pos_losses = np.zeros(n_adapt_iters)
     sum_rot_losses = np.zeros(n_adapt_iters)
 
+    log_file = open(f"{results_fname}.txt", "w")
+
     pbar = tqdm(total=num_batches)
     for b in range(num_batches):
         # Position parameter adaptation
@@ -76,7 +80,8 @@ def evaluate_adaptation(policy: Policy, adaptation_func, dstep,
                                         batch_size:(b + 1) * batch_size]
         pos_batch_data = load_batch(pos_dataset, batch_pos_indices)
         pos_losses = evaluate_helper(policy, adaptation_func, pos_batch_data,
-                                     train_pos=True, train_rot=False, n_adapt_iters=n_adapt_iters, dstep=dstep)
+                                     train_pos=True, train_rot=False, n_adapt_iters=n_adapt_iters, dstep=dstep,
+                                     log_file=log_file)
         sum_pos_losses += np.array(pos_losses) * len(batch_pos_indices)
 
         # Rotation parameter adaptation
@@ -84,7 +89,8 @@ def evaluate_adaptation(policy: Policy, adaptation_func, dstep,
                                         batch_size:(b + 1) * batch_size]
         rot_batch_data = load_batch(rot_dataset, batch_rot_indices)
         rot_losses = evaluate_helper(policy, adaptation_func, rot_batch_data,
-                                     train_pos=False, train_rot=True, n_adapt_iters=n_adapt_iters, dstep=dstep)
+                                     train_pos=False, train_rot=True, n_adapt_iters=n_adapt_iters, dstep=dstep,
+                                     log_file=log_file)
         sum_rot_losses += np.array(rot_losses) * len(batch_rot_indices)
         pbar.update(1)
 
@@ -105,7 +111,7 @@ def run_evaluation():
     model_name = "policy_2D"
     # model_name = "policy_3D"
     loaded_epoch = 100
-    n_adapt_iters = 3
+    n_adapt_iters = 30
 
     with open(os.path.join(Params.model_root, model_name, "train_args_pt_1.json"), "r") as f:
         model_args = json.load(f)
@@ -138,50 +144,77 @@ def run_evaluation():
         root=f"data/rot_{str_3D}_test", buffer_size=buffer_size)
     dstep = Params.dstep_3D if is_3D else Params.dstep_2D
 
-    # ########### SGD ###########
-    lr = 1e-1
-    results_fname = os.path.join(save_dir, "SGD")
-    adaptation_func = lambda *args, **kwargs: perform_adaptation(
-        Optimizer=torch.optim.SGD, lr=lr, *args, **kwargs)
-    evaluate_adaptation(policy, adaptation_func, dstep,
-                        pos_dataset, rot_dataset,
-                        n_adapt_iters, results_fname)
+    # # ########### RLS###########
+    # rls = RLS(alpha=0.5, lmbda=0.3)
+    # rls_name = f"eval_RLS_alpha_{rls.alpha}_lmbda_{rls.lmbda}"
+    # adaptation_func = lambda *args, **kwargs: perform_adaptation_rls(
+    #     rls=rls, *args, **kwargs)
+    # results_fname = os.path.join(save_dir, rls_name)
+    # evaluate_adaptation(policy, adaptation_func, dstep,
+    #                     pos_dataset, rot_dataset,
+    #                     n_adapt_iters, results_fname)
 
-    import ipdb
-    ipdb.set_trace()
+    # # ########### Adam ###########
+    # lr = 1e-1
+    # results_fname = os.path.join(save_dir, "Adam")
+    # adaptation_func = lambda *args, **kwargs: perform_adaptation(
+    #     Optimizer=torch.optim.Adam, lr=lr, *args, **kwargs)
+    # evaluate_adaptation(policy, adaptation_func, dstep,
+    #                     pos_dataset, rot_dataset,
+    #                     n_adapt_iters, results_fname)
 
-    # ########### Adam ###########
-    lr = 1e-1
-    results_fname = os.path.join(save_dir, "Adam")
-    adaptation_func = lambda *args, **kwargs: perform_adaptation(
-        Optimizer=torch.optim.Adam, lr=lr, *args, **kwargs)
-    evaluate_adaptation(policy, adaptation_func, dstep,
-                        pos_dataset, rot_dataset,
-                        n_adapt_iters, results_fname)
+    # # ########### SGD ###########
+    # lr = 0.3
+    # results_fname = os.path.join(save_dir, "SGD")
+    # adaptation_func = lambda *args, **kwargs: perform_adaptation(
+    #     Optimizer=torch.optim.SGD, lr=lr, *args, **kwargs)
+    # evaluate_adaptation(policy, adaptation_func, dstep,
+    #                     pos_dataset, rot_dataset,
+    #                     n_adapt_iters, results_fname)
 
-    # ########### RLS###########
-    rls = RLS(alpha=0.1, lmbda=0.3)
-    rls_name = f"eval_RLS_alpha_{rls.alpha}_lmbda_{rls.lmbda}"
-    adaptation_func = lambda *args, **kwargs: perform_adaptation_rls(
-        rls=rls, *args, **kwargs)
-    results_fname = os.path.join(save_dir, rls_name)
-    evaluate_adaptation(policy, adaptation_func, dstep,
-                        pos_dataset, rot_dataset,
-                        n_adapt_iters, results_fname)
-
-    # ########### Learn2Learn ###########
-    learn2learn_name = "learned_opt_rot_offset_easier_multiplier"
+    # ########### (SEPARATE) Learn2Learn ###########
+    learn2learn_name = "learned_opt_pos_and_rot_rand_choice"
     results_fname = os.path.join(save_dir, learn2learn_name)
-    learned_opt = LearnedOptimizer(device=DEVICE, max_steps=2)
-    learned_opt.to(DEVICE)
-    learned_opt.train()
+    args_path = os.path.join(
+        Params.model_root, learn2learn_name, "train_args.json")
+    with open(args_path, "r") as f:
+        learn2learn_args = json.load(f)
+    learned_opt = LearnedOptimizer(device=DEVICE, max_steps=1,
+                                   tgt_lr=learn2learn_args['tgt_lr'],
+                                   opt_lr=learn2learn_args['opt_lr'],
+                                   hidden_dim=learn2learn_args['hidden_dim'],)
     learned_opt.load_state_dict(
-        torch.load(os.path.join(Params.model_root, learn2learn_name)))
+        torch.load(os.path.join(Params.model_root, learn2learn_name, "learned_opt_3.h5")))
+    learned_opt.to(DEVICE)
+    learned_opt.eval()
+
     adaptation_func = lambda *args, **kwargs: perform_adaptation_learn2learn(
         learned_opt=learned_opt, *args, **kwargs)
     evaluate_adaptation(policy, adaptation_func, dstep,
                         pos_dataset, rot_dataset,
                         n_adapt_iters, results_fname)
+
+    # # ########### (SHARED) Learn2Learn ###########
+    # learn2learn_name = "learned_opt_pos_and_rot_rand_choice"
+    # results_fname = os.path.join(save_dir, learn2learn_name)
+    # args_path = os.path.join(
+    #     Params.model_root, learn2learn_name, "train_args.json")
+    # with open(args_path, "r") as f:
+    #     learn2learn_args = json.load(f)
+    # learned_opt = LearnedOptimizer(device=DEVICE, max_steps=1,
+    #                                tgt_lr=learn2learn_args['tgt_lr'],
+    #                                opt_lr=learn2learn_args['opt_lr'],
+    #                                hidden_dim=learn2learn_args['hidden_dim'],)
+    # learned_opt.load_state_dict(
+    #     torch.load(os.path.join(Params.model_root, learn2learn_name, "learned_opt_3.h5")))
+    # learned_opt.to(DEVICE)
+    # learned_opt.eval()
+
+    # adaptation_func = lambda *args, **kwargs: perform_adaptation_learn2learn(
+    #     learned_opt=learned_opt, *args, **kwargs)
+    # evaluate_adaptation(policy, adaptation_func, dstep,
+    #                     pos_dataset, rot_dataset,
+    #                     n_adapt_iters, results_fname)
 
 
 if __name__ == "__main__":
