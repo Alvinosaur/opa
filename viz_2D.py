@@ -62,7 +62,7 @@ def draw(ax: plt.Axes, start_pose: np.ndarray, goal_pose: np.ndarray,
          goal_radius: float, agent_radius: float,
          object_types: np.ndarray, offset_objects: List[Object],
          pred_traj: np.ndarray, expert_traj: np.ndarray,
-         title="", object_forces: np.ndarray = None, show_rot=True, show_expert=True, hold=False):
+         title="", object_forces=None, show_rot=True, show_expert=True, hold=False, save_path=None):
     """
     Draws 2D scene with objects, agent, expert traj, and predicted traj. Also
     optionally draws model-predicted "force" each object exerts on the agent.
@@ -192,6 +192,8 @@ def draw(ax: plt.Axes, start_pose: np.ndarray, goal_pose: np.ndarray,
     plt.legend(bbox_to_anchor=(1.05, 1.0), loc='upper left', fontsize=15)
 
     plt.draw()
+    if save_path is not None:
+        plt.savefig(save_path)
     if hold:
         plt.pause(2.0)  # Give enough time to plot before ipdb
         # ipdb.set_trace()
@@ -371,7 +373,7 @@ def viz_main(policy: Policy, test_data_root: str, calc_pos, calc_rot):
                    objects=objects, expert_traj=expert_traj, ax=ax, viz_args=viz_args)
 
 
-def viz_adaptation(policy: Policy, test_data_root: str, train_pos, train_rot, adaptation_func):
+def viz_adaptation(policy: Policy, test_data_root: str, train_pos, train_rot, adaptation_func, save_plots_dir=None):
     """
     Visually evalutes 2D policy with varying number of adaptation steps, where
     adaptation is performed directly on expert data.
@@ -387,7 +389,7 @@ def viz_adaptation(policy: Policy, test_data_root: str, train_pos, train_rot, ad
     plt.pause(0.1)
     updates_per_step = 10
     num_update_steps = 3
-    num_updates_series = [0] + [updates_per_step] * num_update_steps
+    num_updates_series = np.arange(0, num_update_steps + 1) * updates_per_step
 
     N = 10
     for i in range(N):
@@ -432,42 +434,31 @@ def viz_adaptation(policy: Policy, test_data_root: str, train_pos, train_rot, ad
                              pos_requires_grad=pos_requires_grad, rot_requires_grad=rot_requires_grad)
 
         # Observe model performance after various number of update steps
-        total_updates = 0
+        total_updates = max(num_updates_series)
+        _, pred_trajs = adaptation_func(policy=policy, batch_data=[batch_data],
+                                        train_pos=train_pos, train_rot=train_rot,
+                                        n_adapt_iters=total_updates, dstep=Params.dstep_2D,
+                                        verbose=True, clip_params=False)
+        pred_trajs = np.vstack(pred_trajs)
+
+        import ipdb
+        ipdb.set_trace()
+
         for num_updates in num_updates_series:
-            total_updates += num_updates
-            _, pred_traj = adaptation_func(policy=policy, batch_data=[batch_data],
-                                           train_pos=train_pos, train_rot=train_rot,
-                                           n_adapt_iters=num_updates, dstep=Params.dstep_2D,
-                                           verbose=True, clip_params=True)
-            # remove batch dimension
-            pred_traj = pred_traj[0].detach().cpu().numpy()
+            pred_traj = pred_trajs[num_updates]
 
             # Convert <cos, sin> representation back to theta
             pred_traj = np.hstack([pred_traj[:, :POS_DIM],
                                    np.arctan2(pred_traj[:, -1], pred_traj[:, -2])[:, np.newaxis]])
 
-            if train_rot:
-                cur_offsets = torch.stack(
-                    policy.obj_rot_offsets).detach().cpu().numpy()
-                print(f"Learned rot offsets ({np.rad2deg(cur_offsets[object_idxs]).astype(int)}), "
-                      f"actual ({np.rad2deg(theta_offsets).astype(int)})")
-
-                rot_pref_feats = torch.stack(
-                    policy.obj_rot_feats).detach().cpu().numpy()
-                print(f"Learned rot pref-feats ({rot_pref_feats[object_idxs]}), "
-                      f"Possible ({policy.policy_network.rot_pref_feat_train[object_types]}) ")
-
-            if train_pos:
-                pos_pref_feats = torch.stack(
-                    policy.obj_pos_feats).detach().cpu().numpy()
-                print(f"Learned pos pref-feats ({pos_pref_feats}), "
-                      f"Possible ({policy.policy_network.pos_pref_feat_train[object_types]}) ")
-
+            if save_plots_dir is not None:
+                save_path = os.path.join(save_plots_dir,
+                                         f"adapt_step_{total_updates}.png")
             draw(ax, start_pose=start, goal_pose=goal,
                  goal_radius=goal_radius, agent_radius=Params.agent_radius,
                  object_types=object_types, offset_objects=objects,
                  pred_traj=pred_traj, expert_traj=expert_traj,
-                 title=f"Num updates: {total_updates}", show_rot=train_rot, hold=True)
+                 title=f"Num updates: {total_updates}", show_rot=train_rot, hold=False, save_path=save_path)
 
 
 def parse_arguments():
@@ -483,6 +474,8 @@ def parse_arguments():
                         help="calculate rotation")
     parser.add_argument('--adapt', action='store_true',
                         help="Viz adaptation. If False, viz policy with pretrained object features.")
+    parser.add_argument('--use_sgd', action='store_true',
+                        help="Use vanilla SGD to adapt object features.")
     parser.add_argument('--use_rls', action='store_true',
                         help="Use rls to adapt object features.")
     parser.add_argument('--use_learn2learn', action='store_true',
@@ -532,9 +525,11 @@ if __name__ == '__main__':
             learned_opt.train()
 
             if args.learn2learn_name is not None:
+                save_plots_dir = f"eval_adaptation_results/{args.model_name}"
                 learned_opt.load_state_dict(
                     torch.load(os.path.join(Params.model_root, args.model_name, args.learn2learn_name)))
             else:
+                save_plots_dir = None
                 print(
                     "WARNING: No learned optimizer name provided. Using random init weights!")
 
@@ -543,8 +538,8 @@ if __name__ == '__main__':
         else:
             print("Using Adam SGD to adapt object features.")
             adaptation_func = perform_adaptation  # detach_obj_feats
+            save_plots_dir = "eval_adaptation_results/Adam"
 
-        torch.autograd.set_detect_anomaly(True)
         viz_adaptation(policy, test_data_root,
                        train_pos=args.calc_pos, train_rot=args.calc_rot,
                        adaptation_func=adaptation_func)
