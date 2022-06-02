@@ -194,11 +194,12 @@ def draw(ax: plt.Axes, start_pose: np.ndarray, goal_pose: np.ndarray,
     plt.draw()
     if save_path is not None:
         plt.savefig(save_path)
-    if hold:
-        plt.pause(2.0)  # Give enough time to plot before ipdb
-        # ipdb.set_trace()
     else:
-        plt.pause(DRAW_DURATION)
+        if hold:
+            plt.pause(2.0)  # Give enough time to plot before ipdb
+            # ipdb.set_trace()
+        else:
+            plt.pause(DRAW_DURATION)
 
 
 def viz_helper(policy: Policy, start: np.ndarray, goal: np.ndarray, goal_radius,
@@ -373,7 +374,7 @@ def viz_main(policy: Policy, test_data_root: str, calc_pos, calc_rot):
                    objects=objects, expert_traj=expert_traj, ax=ax, viz_args=viz_args)
 
 
-def viz_adaptation(policy: Policy, test_data_root: str, train_pos, train_rot, adaptation_func, save_plots_dir=None):
+def viz_adaptation(policy: Policy, test_data_root: str, train_pos, train_rot, adaptation_func, save_plots_dir=None, log_file=None):
     """
     Visually evalutes 2D policy with varying number of adaptation steps, where
     adaptation is performed directly on expert data.
@@ -392,12 +393,13 @@ def viz_adaptation(policy: Policy, test_data_root: str, train_pos, train_rot, ad
     num_updates_series = np.arange(0, num_update_steps + 1) * updates_per_step
 
     N = 10
-    for i in range(N):
+    for sample_i in range(N):
         # Load data
         rand_file_idx = np.random.choice(100)
         print("file idx: %d" % rand_file_idx)
         data = np.load(os.path.join(test_data_root, "traj_%d.npz" %
                        rand_file_idx), allow_pickle=True)
+        assert data["is_rot"].item() == train_rot
         expert_traj = data["states"]
         T = expert_traj.shape[0]
         goal_radius = data["goal_radius"].item()
@@ -425,6 +427,9 @@ def viz_adaptation(policy: Policy, test_data_root: str, train_pos, train_rot, ad
                    ori=object_poses[i][-1] + theta_offsets[i]) for i in range(len(object_types))
         ]
 
+        import ipdb
+        ipdb.set_trace()
+
         # Reset learned object features for objects
         pos_obj_types = [None] * num_objects  # None means no pos preference
         pos_requires_grad = [train_pos] * num_objects
@@ -438,14 +443,11 @@ def viz_adaptation(policy: Policy, test_data_root: str, train_pos, train_rot, ad
         _, pred_trajs = adaptation_func(policy=policy, batch_data=[batch_data],
                                         train_pos=train_pos, train_rot=train_rot,
                                         n_adapt_iters=total_updates, dstep=Params.dstep_2D,
-                                        verbose=True, clip_params=False)
+                                        verbose=True, clip_params=False, ret_trajs=True, log_file=log_file)
         pred_trajs = np.vstack(pred_trajs)
 
-        import ipdb
-        ipdb.set_trace()
-
-        for num_updates in num_updates_series:
-            pred_traj = pred_trajs[num_updates]
+        for update_i in num_updates_series:
+            pred_traj = pred_trajs[update_i]
 
             # Convert <cos, sin> representation back to theta
             pred_traj = np.hstack([pred_traj[:, :POS_DIM],
@@ -453,7 +455,9 @@ def viz_adaptation(policy: Policy, test_data_root: str, train_pos, train_rot, ad
 
             if save_plots_dir is not None:
                 save_path = os.path.join(save_plots_dir,
-                                         f"adapt_step_{total_updates}.png")
+                                         f"sample_{sample_i}_adapt_step_{update_i}.png")
+            else:
+                save_path = None
             draw(ax, start_pose=start, goal_pose=goal,
                  goal_radius=goal_radius, agent_radius=Params.agent_radius,
                  object_types=object_types, offset_objects=objects,
@@ -514,8 +518,12 @@ if __name__ == '__main__':
     # define scene objects and whether or not we care about their pos/ori
     else:
         if args.use_rls:
-            print("Using RLS to adapt object features.")
-            rls = RLS(alpha=0.5, lmbda=0.4)
+            alpha = 0.5
+            lmbda = 0.4
+            print(
+                f"Using RLS(alpha_{alpha}_lmbda_{lmbda}) to adapt object features.")
+            save_plots_dir = f"eval_adaptation_results/RLS(alpha_{alpha}_lmbda_{lmbda})"
+            rls = RLS(alpha=alpha, lmbda=lmbda)
             adaptation_func = lambda *args, **kwargs: perform_adaptation_rls(
                 rls=rls, *args, **kwargs)
         elif args.use_learn2learn:
@@ -535,11 +543,27 @@ if __name__ == '__main__':
 
             adaptation_func = lambda *args, **kwargs: perform_adaptation_learn2learn(
                 learned_opt=learned_opt, *args, **kwargs)
+        elif args.use_sgd:
+            print("Using SGD to adapt object features.")
+            adaptation_func = lambda *args, **kwargs: perform_adaptation(
+                Optimizer=torch.optim.SGD, *args, **kwargs)
+            save_plots_dir = "eval_adaptation_results/SGD"
         else:
-            print("Using Adam SGD to adapt object features.")
-            adaptation_func = perform_adaptation  # detach_obj_feats
+            print("Using Adam to adapt object features.")
+            adaptation_func = lambda *args, **kwargs: perform_adaptation(
+                Optimizer=torch.optim.Adam, *args, **kwargs)
             save_plots_dir = "eval_adaptation_results/Adam"
+
+        if save_plots_dir is not None:
+            if args.calc_pos:
+                save_plots_dir += "_pos"
+            if args.calc_rot:
+                save_plots_dir += "_rot"
+            os.makedirs(save_plots_dir, exist_ok=True)
+            log_file = open(f"{save_plots_dir}/qualitative_output.txt", "w")
+        else:
+            log_file = None
 
         viz_adaptation(policy, test_data_root,
                        train_pos=args.calc_pos, train_rot=args.calc_rot,
-                       adaptation_func=adaptation_func)
+                       adaptation_func=adaptation_func, save_plots_dir=save_plots_dir, log_file=log_file)

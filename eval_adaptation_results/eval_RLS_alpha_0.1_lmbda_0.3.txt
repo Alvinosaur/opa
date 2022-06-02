@@ -1,0 +1,66 @@
+Original p: tensor([0.5941], device='cuda:0', requires_grad=True)
+Original p: tensor([0.5941], device='cuda:0', requires_grad=True)
+iter 1 loss: 0.531
+params: [tensor([0.5925], device='cuda:0', requires_grad=True), tensor([0.5682], device='cuda:0', requires_grad=True)]
+iter 2 loss: 0.517
+params: [tensor([0.5918], device='cuda:0', requires_grad=True), tensor([0.5492], device='cuda:0', requires_grad=True)]
+iter 3 loss: 0.507
+params: [tensor([0.5926], device='cuda:0', requires_grad=True), tensor([0.5362], device='cuda:0', requires_grad=True)]
+iter 4 loss: 0.501
+params: [tensor([0.5930], device='cuda:0', requires_grad=True), tensor([0.5206], device='cuda:0', requires_grad=True)]
+iter 5 loss: 0.494
+params: [tensor([0.5916], device='cuda:0', requires_grad=True), tensor([0.5047], device='cuda:0', requires_grad=True)]
+iter 6 loss: 0.487
+params: [tensor([0.5850], device='cuda:0', requires_grad=True), tensor([0.4897], device='cuda:0', requires_grad=True)]
+iter 7 loss: 0.482
+params: [tensor([0.5832], device='cuda:0', requires_grad=True), tensor([0.4798], device='cuda:0', requires_grad=True)]
+iter 8 loss: 0.479
+params: [tensor([0.5813], device='cuda:0', requires_grad=True), tensor([0.4648], device='cuda:0', requires_grad=True)]
+iter 9 loss: 0.474
+params: [tensor([0.5797], device='cuda:0', requires_grad=True), tensor([0.4456], device='cuda:0', requires_grad=True)]
+iter 10 loss: 0.468
+params: [tensor([0.5808], device='cuda:0', requires_grad=True), tensor([0.4218], device='cuda:0', requires_grad=True)]
+iter 11 loss: 0.460
+params: [tensor([0.5841], device='cuda:0', requires_grad=True), tensor([0.3955], device='cuda:0', requires_grad=True)]
+iter 12 loss: 0.452
+params: [tensor([0.5901], device='cuda:0', requires_grad=True), tensor([0.3902], device='cuda:0', requires_grad=True)]
+iter 13 loss: 0.449
+params: [tensor([0.5920], device='cuda:0', requires_grad=True), tensor([0.3813], device='cuda:0', requires_grad=True)]
+iter 14 loss: 0.446
+params: [tensor([0.5917], device='cuda:0', requires_grad=True), tensor([0.3634], device='cuda:0', requires_grad=True)]
+iter 15 loss: 0.442
+params: [tensor([0.5919], device='cuda:0', requires_grad=True), tensor([0.3397], device='cuda:0', requires_grad=True)]
+iter 16 loss: 0.436
+params: [tensor([0.5893], device='cuda:0', requires_grad=True), tensor([0.3125], device='cuda:0', requires_grad=True)]
+iter 17 loss: 0.431
+params: [tensor([0.5856], device='cuda:0', requires_grad=True), tensor([0.2860], device='cuda:0', requires_grad=True)]
+iter 18 loss: 0.427
+params: [tensor([0.5802], device='cuda:0', requires_grad=True), tensor([0.2677], device='cuda:0', requires_grad=True)]
+iter 19 loss: 0.425
+params: [tensor([0.5743], device='cuda:0', requires_grad=True), tensor([0.2437], device='cuda:0', requires_grad=True)]
+iter 20 loss: 0.422
+params: [tensor([0.5687], device='cuda:0', requires_grad=True), tensor([0.2124], device='cuda:0', requires_grad=True)]
+iter 21 loss: 0.418
+params: [tensor([0.5636], device='cuda:0', requires_grad=True), tensor([0.1710], device='cuda:0', requires_grad=True)]
+iter 22 loss: 0.414
+params: [tensor([0.5518], device='cuda:0', requires_grad=True), tensor([0.1285], device='cuda:0', requires_grad=True)]
+iter 23 loss: 0.411
+params: [tensor([0.5389], device='cuda:0', requires_grad=True), tensor([0.0945], device='cuda:0', requires_grad=True)]
+iter 24 loss: 0.408
+params: [tensor([0.5283], device='cuda:0', requires_grad=True), tensor([0.0527], device='cuda:0', requires_grad=True)]
+iter 25 loss: 0.405
+params: [tensor([0.5371], device='cuda:0', requires_grad=True), tensor([0.0351], device='cuda:0', requires_grad=True)]
+iter 26 loss: 0.403
+params: [tensor([0.5425], device='cuda:0', requires_grad=True), tensor([0.0079], device='cuda:0', requires_grad=True)]
+iter 27 loss: 0.400
+params: [tensor([0.5416], device='cuda:0', requires_grad=True), tensor([-0.0247], device='cuda:0', requires_grad=True)]
+iter 28 loss: 0.398
+params: [tensor([0.5292], device='cuda:0', requires_grad=True), tensor([-0.0430], device='cuda:0', requires_grad=True)]
+iter 29 loss: 0.398
+params: [tensor([0.5184], device='cuda:0', requires_grad=True), tensor([-0.0662], device='cuda:0', requires_grad=True)]
+iter 30 loss: 0.398
+params: [tensor([0.5128], device='cuda:0', requires_grad=True), tensor([-0.0853], device='cuda:0', requires_grad=True)]
+Original p: tensor([-0.4723], device='cuda:0', requires_grad=True)
+Original p: tensor([-0.4723], device='cuda:0', requires_grad=True)
+Original p: tensor([0.0035], device='cuda:0', requires_grad=True)
+Original p: tensor([0.0035], device='cuda:0', requires_grad=True)

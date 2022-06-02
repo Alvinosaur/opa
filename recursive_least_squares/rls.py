@@ -23,7 +23,8 @@ class RLS(object):
         # Reference: https://stackoverflow.com/questions/43451125/pytorch-what-are-the-gradient-arguments/47026836
         # More efficient way? https://gist.github.com/sbarratt/37356c46ad1350d4c30aefbd488a4faa
         all_Gs = []
-        for i in range(length):
+        from tqdm import tqdm
+        for i in tqdm(range(length)):
             dL_dyhat = torch.nn.functional.one_hot(
                 torch.tensor(i), num_classes=length).float().to(y.device)
             G = autograd.grad(yhat, thetas, dL_dyhat,
