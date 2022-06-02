@@ -742,8 +742,9 @@ class Policy(object):
             elif pos_obj_types[i] == Params.ATTRACT_IDX:
                 obj_pos_feats.append(detach_tensor(pos_attract_feat))
             elif use_rand_init:  # None
-                obj_pos_feats.append(torch.randn(
-                    self.pos_ignore_feat.shape, device=self.device))
+                rand_feat = torch.FloatTensor(self.pos_ignore_feat.shape).uniform_(
+                    pos_attract_feat.item(), pos_repel_feat.item())
+                obj_pos_feats.append(rand_feat.to(self.device))
             else:
                 obj_pos_feats.append(detach_tensor(self.pos_ignore_feat))
 

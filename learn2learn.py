@@ -89,7 +89,10 @@ class LearnedOptimizer(nn.Module):
     def reset_lstm(self):
         self.param_size = None  # Will automatically reset hidden states on the next call
 
-    def step(self, new_loss, params, verbose=False):
+    def step(self, new_loss, params, verbose=False, retain_graph_override=False):
+        if len(params) == 0:
+            return [], False
+
         if self.param_size is None:
             # Initialize hidden and cell states
             self.param_size = sum(p.numel() for p in params)
@@ -100,7 +103,7 @@ class LearnedOptimizer(nn.Module):
             self.cell_states = copy.deepcopy(zero_init)
             self.cell_states_temp = copy.deepcopy(zero_init)
 
-        new_loss.backward(retain_graph=self.training)
+        new_loss.backward(retain_graph=self.training or retain_graph_override)
         self.loss_to_optimize = self.loss_to_optimize + new_loss
         self.num_steps += 1
 
@@ -141,7 +144,7 @@ class LearnedOptimizer(nn.Module):
             offset += cur_sz
             if verbose:
                 print("Original Grad: %.3f, LSTM Grad: %.3f, New P: %.3f" % (
-                    -gradients.item(), updates.item(), new_p.item()))
+                    gradients.item(), updates.item(), new_p.item()))
 
         # prevent computation graph from being too large
         if self.num_steps >= self.max_steps:
@@ -167,6 +170,70 @@ class LearnedOptimizer(nn.Module):
 
         return new_params, need_detach
 
+    @staticmethod
+    def load_model(folder, device, epoch=3):
+        args_path = os.path.join(folder, "train_args.json")
+        with open(args_path, "r") as f:
+            learn2learn_args = json.load(f)
+        learned_opt = LearnedOptimizer(device=device, max_steps=1,
+                                       tgt_lr=learn2learn_args['tgt_lr'],
+                                       opt_lr=learn2learn_args['opt_lr'],
+                                       hidden_dim=learn2learn_args['hidden_dim'],)
+        learned_opt.load_state_dict(
+            torch.load(os.path.join(folder, f"learned_opt_{epoch}.h5")))
+        learned_opt.to(device)
+        learned_opt.eval()
+
+        return learned_opt
+
+
+class LearnedOptimizerGroup(object):
+    def __init__(self, pos_opt_path, rot_opt_path, rot_offset_opt_path, device):
+        self.pos_opt = LearnedOptimizer.load_model(pos_opt_path, device=device)
+        self.rot_opt = LearnedOptimizer.load_model(rot_opt_path, device=device)
+        self.rot_offset_opt = LearnedOptimizer.load_model(
+            rot_offset_opt_path, device=device)
+
+    def reset_lstm(self):
+        self.pos_opt.reset_lstm()
+        self.rot_opt.reset_lstm()
+        self.rot_offset_opt.reset_lstm()
+
+    def step(self, new_loss, params, param_types, verbose=False):
+        # separate params into pos, rot, and rot_offset
+        pos_params, rot_params, rot_offset_params = [], [], []
+        pos_param_idxs, rot_param_idxs, rot_offset_param_idxs = [], [], []
+        for pi, (p, t) in enumerate(zip(params, param_types)):
+            if t == Policy.POS_FEAT:
+                pos_params.append(p)
+                pos_param_idxs.append(pi)
+            elif t == Policy.ROT_FEAT:
+                rot_params.append(p)
+                rot_param_idxs.append(pi)
+            elif t == Policy.ROT_OFFSET:
+                rot_offset_params.append(p)
+                rot_offset_param_idxs.append(pi)
+            else:
+                raise ValueError("Unknown param type")
+
+        pos_params, need_detach_pos = self.pos_opt.step(
+            new_loss, pos_params, verbose=verbose, retain_graph_override=True)
+        rot_params, need_detach_rot = self.rot_opt.step(
+            new_loss, rot_params, verbose=verbose, retain_graph_override=True)
+        rot_offset_params, need_detach_rot_offset = self.rot_offset_opt.step(
+            new_loss, rot_offset_params, verbose=verbose, retain_graph_override=False)
+
+        # combine params back into list
+        new_params = [None] * len(params)
+        for pi, p in zip(pos_param_idxs, pos_params):
+            new_params[pi] = p
+        for pi, p in zip(rot_param_idxs, rot_params):
+            new_params[pi] = p
+        for pi, p in zip(rot_offset_param_idxs, rot_offset_params):
+            new_params[pi] = p
+
+        return new_params, (need_detach_pos or need_detach_rot or need_detach_rot_offset)
+
 
 def train_helper(policy: Policy, learned_opt: LearnedOptimizer, batch_data, train_pos, train_rot, adapt_kwargs):
     (traj, goal_radius, obj_poses, obj_radii, obj_types) = batch_data[0]
@@ -179,13 +246,14 @@ def train_helper(policy: Policy, learned_opt: LearnedOptimizer, batch_data, trai
     pos_requires_grad = [train_pos] * num_objects
 
     if train_rot:
-        if np.random.random() < 0.5:
+        if np.random.random() < 1.0:
+            # Learn offsets
             rot_obj_types = [Params.IGNORE_ROT_IDX, Params.CARE_ROT_IDX]
             rot_requires_grad = [False] * num_objects
             rot_offset_requires_grad = [True] * num_objects
             rot_offsets = [None] * num_objects
         else:
-            # None means no rot preference
+            # Learn pref feats
             rot_obj_types = [None] * num_objects
             rot_requires_grad = [True] * num_objects
             rot_offset_requires_grad = [False] * \
@@ -205,7 +273,7 @@ def train_helper(policy: Policy, learned_opt: LearnedOptimizer, batch_data, trai
                          rot_offsets=rot_offsets,
                          pos_requires_grad=pos_requires_grad, rot_requires_grad=rot_requires_grad,
                          rot_offset_requires_grad=rot_offset_requires_grad,
-                         use_rand_init=False)
+                         use_rand_init=True)
 
     losses, _ = perform_adaptation_learn2learn(policy, learned_opt, batch_data,
                                                train_pos=train_pos, train_rot=train_rot,
@@ -296,7 +364,7 @@ def train(policy: Policy, learned_opt: LearnedOptimizer, train_args, saved_root:
                 print(epoch_pos_losses / (b + 1))
                 print(epoch_rot_losses / (b + 1))
 
-            if b == 10 and epoch == 0:
+            if b == 1 and epoch == 0:
                 # Optionally save copy of all relevant scripts/files for reproducibility
                 os.mkdir(saved_root)
                 shutil.copy("model.py", os.path.join(saved_root, "model.py"))

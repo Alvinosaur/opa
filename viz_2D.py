@@ -16,9 +16,9 @@ import matplotlib.pyplot as plt
 import matplotlib.colors as mcolors
 
 import torch
-from learn2learn import LearnedOptimizer
+from learn2learn import LearnedOptimizer, LearnedOptimizerGroup
 
-from online_adaptation import perform_adaptation, perform_adaptation_rls, perform_adaptation_learn2learn, DEVICE
+from online_adaptation import perform_adaptation, perform_adaptation_rls, perform_adaptation_learn2learn, perform_adaptation_learn2learn_group, DEVICE
 from elastic_band import Object
 from data_params import Params
 from model import Policy, PolicyNetwork, pose_to_model_input, decode_ori
@@ -374,7 +374,7 @@ def viz_main(policy: Policy, test_data_root: str, calc_pos, calc_rot):
                    objects=objects, expert_traj=expert_traj, ax=ax, viz_args=viz_args)
 
 
-def viz_adaptation(policy: Policy, test_data_root: str, train_pos, train_rot, adaptation_func, save_plots_dir=None, log_file=None):
+def viz_adaptation(policy: Policy, num_updates, test_data_root: str, train_pos, train_rot, adaptation_func, save_plots_dir=None, log_file=None):
     """
     Visually evalutes 2D policy with varying number of adaptation steps, where
     adaptation is performed directly on expert data.
@@ -388,9 +388,8 @@ def viz_adaptation(policy: Policy, test_data_root: str, train_pos, train_rot, ad
     _, ax = plt.subplots(figsize=(14, 6))
     plt.draw()
     plt.pause(0.1)
-    updates_per_step = 10
-    num_update_steps = 3
-    num_updates_series = np.arange(0, num_update_steps + 1) * updates_per_step
+    # view traj at these update indices
+    num_updates_series = list(range(num_updates + 1))
 
     N = 10
     for sample_i in range(N):
@@ -427,9 +426,6 @@ def viz_adaptation(policy: Policy, test_data_root: str, train_pos, train_rot, ad
                    ori=object_poses[i][-1] + theta_offsets[i]) for i in range(len(object_types))
         ]
 
-        import ipdb
-        ipdb.set_trace()
-
         # Reset learned object features for objects
         pos_obj_types = [None] * num_objects  # None means no pos preference
         pos_requires_grad = [train_pos] * num_objects
@@ -439,7 +435,7 @@ def viz_adaptation(policy: Policy, test_data_root: str, train_pos, train_rot, ad
                              pos_requires_grad=pos_requires_grad, rot_requires_grad=rot_requires_grad)
 
         # Observe model performance after various number of update steps
-        total_updates = max(num_updates_series)
+        total_updates = max(num_updates_series) + 1
         _, pred_trajs = adaptation_func(policy=policy, batch_data=[batch_data],
                                         train_pos=train_pos, train_rot=train_rot,
                                         n_adapt_iters=total_updates, dstep=Params.dstep_2D,
@@ -462,7 +458,7 @@ def viz_adaptation(policy: Policy, test_data_root: str, train_pos, train_rot, ad
                  goal_radius=goal_radius, agent_radius=Params.agent_radius,
                  object_types=object_types, offset_objects=objects,
                  pred_traj=pred_traj, expert_traj=expert_traj,
-                 title=f"Num updates: {total_updates}", show_rot=train_rot, hold=False, save_path=save_path)
+                 title=f"Num updates: {update_i}", show_rot=train_rot, hold=False, save_path=save_path)
 
 
 def parse_arguments():
@@ -472,6 +468,7 @@ def parse_arguments():
     parser.add_argument('--data_name', action='store',
                         type=str, help="name for data folder")
     parser.add_argument('--loaded_epoch', action='store', type=int, default=-1)
+    parser.add_argument('--num_updates', action='store', type=int, default=4)
     parser.add_argument('--calc_rot', action='store_true',
                         help="calculate position")
     parser.add_argument('--calc_pos', action='store_true',
@@ -528,21 +525,31 @@ if __name__ == '__main__':
                 rls=rls, *args, **kwargs)
         elif args.use_learn2learn:
             print("Using Learn2Learn to adapt object features.")
-            learned_opt = LearnedOptimizer(device=DEVICE, max_steps=2)
-            learned_opt.to(DEVICE)
-            learned_opt.train()
+            save_plots_dir = f"eval_adaptation_results/learn2learn_group"
+            learned_opts = LearnedOptimizerGroup(
+                pos_opt_path=os.path.join(
+                    Params.model_root, "learned_opt_pos_pref"),
+                rot_opt_path=os.path.join(
+                    Params.model_root, "learned_opt_rot_pref_easier"),
+                rot_offset_opt_path=os.path.join(
+                    Params.model_root, "learned_opt_rot_offset_easier"),
+                device=DEVICE)
+            adaptation_func = lambda *args, **kwargs: perform_adaptation_learn2learn_group(
+                learned_opts=learned_opts, *args, **kwargs)
 
-            if args.learn2learn_name is not None:
-                save_plots_dir = f"eval_adaptation_results/{args.model_name}"
-                learned_opt.load_state_dict(
-                    torch.load(os.path.join(Params.model_root, args.model_name, args.learn2learn_name)))
-            else:
-                save_plots_dir = None
-                print(
-                    "WARNING: No learned optimizer name provided. Using random init weights!")
-
-            adaptation_func = lambda *args, **kwargs: perform_adaptation_learn2learn(
-                learned_opt=learned_opt, *args, **kwargs)
+            # learned_opt = LearnedOptimizer(device=DEVICE, max_steps=2)
+            # learned_opt.to(DEVICE)
+            # learned_opt.train()
+            # if args.learn2learn_name is not None:
+            #     save_plots_dir = f"eval_adaptation_results/{args.model_name}"
+            #     learned_opt.load_state_dict(
+            #         torch.load(os.path.join(Params.model_root, args.model_name, args.learn2learn_name)))
+            # else:
+            #     save_plots_dir = None
+            #     print(
+            #         "WARNING: No learned optimizer name provided. Using random init weights!")
+            # adaptation_func = lambda *args, **kwargs: perform_adaptation_learn2learn(
+            #     learned_opt=learned_opt, *args, **kwargs)
         elif args.use_sgd:
             print("Using SGD to adapt object features.")
             adaptation_func = lambda *args, **kwargs: perform_adaptation(
@@ -564,6 +571,6 @@ if __name__ == '__main__':
         else:
             log_file = None
 
-        viz_adaptation(policy, test_data_root,
+        viz_adaptation(policy, args.num_updates, test_data_root,
                        train_pos=args.calc_pos, train_rot=args.calc_rot,
                        adaptation_func=adaptation_func, save_plots_dir=save_plots_dir, log_file=log_file)

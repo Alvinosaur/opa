@@ -200,8 +200,6 @@ def perform_adaptation(policy: Policy, batch_data: List[Tuple],
             if verbose:
                 write_log(log_file, f"Original p: {p}")
 
-    import ipdb
-    ipdb.set_trace()
     optimizer = Optimizer(adaptable_parameters, lr=lr)
     losses = []
     pred_trajs = []
@@ -229,21 +227,12 @@ def perform_adaptation(policy: Policy, batch_data: List[Tuple],
 
         if verbose:
             write_log(log_file, "iter %d loss: %.3f" %
-                      (iteration + 1, loss.item()))
+                      (iteration, loss.item()))
             write_log(log_file, f"params: {adaptable_parameters}")
 
     # Clip learned features within expected range
     if clip_params:
         policy.clip_adaptable_parameters()
-
-    # Save final predicted trajectory
-    if ret_trajs:
-        with torch.no_grad():
-            _, pred_traj = adaptation_loss(model=policy.policy_network,
-                                           batch_data_processed=batch_data_processed,
-                                           train_pos=train_pos, train_rot=train_rot,
-                                           dstep=dstep)
-        pred_trajs.append(pred_traj.detach().cpu().numpy())
 
     return losses, pred_trajs
 
@@ -290,7 +279,7 @@ def perform_adaptation_rls(policy: Policy, rls: RLS, batch_data: List[Tuple],
         [Params.agent_radius], device=DEVICE).view(1, 1).repeat(B, 1)
 
     # run RLS for multiple iters? or just one iter?
-    for iteration in tqdm(range(n_adapt_iters)):
+    for iteration in range(n_adapt_iters):
         # Perform agent prediction rollout
         pred_traj = model_rollout(goal_tensors=goal_tensors, current_inputs=current_inputs,
                                   start_tensors=start_tensors, goal_rot_inputs=goal_rot_inputs,
@@ -325,21 +314,12 @@ def perform_adaptation_rls(policy: Policy, rls: RLS, batch_data: List[Tuple],
 
         if verbose:
             write_log(log_file, "iter %d loss: %.3f" %
-                      (iteration + 1, loss.item()))
+                      (iteration, loss.item()))
             write_log(log_file, f"params: {adaptable_parameters}")
 
     # Clip learned features within expected range
     if clip_params:
         policy.clip_adaptable_parameters()
-
-    # Save final predicted trajectory
-    if ret_trajs:
-        with torch.no_grad():
-            _, pred_traj = adaptation_loss(model=policy.policy_network,
-                                           batch_data_processed=batch_data_processed,
-                                           train_pos=train_pos, train_rot=train_rot,
-                                           dstep=dstep)
-        pred_trajs.append(pred_traj.detach().cpu().numpy())
 
     return losses, pred_trajs
 
@@ -373,7 +353,7 @@ def perform_adaptation_learn2learn(policy: Policy, learned_opt, batch_data: List
                                               dstep=dstep)
         return [loss.item()], [pred_traj.detach().cpu().numpy()]
 
-    for iteration in (range(1, n_adapt_iters+1)):
+    for iteration in range(n_adapt_iters):
         loss, pred_traj = adaptation_loss(model=policy.policy_network,
                                           batch_data_processed=batch_data_processed,
                                           train_pos=train_pos, train_rot=train_rot,
@@ -396,20 +376,80 @@ def perform_adaptation_learn2learn(policy: Policy, learned_opt, batch_data: List
 
         if verbose:
             write_log(log_file, "iter %d loss: %.3f" %
-                      (iteration + 1, loss.item()))
+                      (iteration, loss.item()))
             write_log(log_file, f"params: {params}")
 
     # Clip learned features within expected range
     if clip_params:
         policy.clip_adaptable_parameters()
 
-    # Save final predicted trajectory
-    if ret_trajs:
+    return losses, pred_trajs
+
+
+def perform_adaptation_learn2learn_group(policy: Policy, learned_opts, batch_data: List[Tuple],
+                                         train_pos: bool, train_rot: bool,
+                                         n_adapt_iters: int, dstep: float,
+                                         verbose=False, clip_params=True,
+                                         ret_trajs=False,
+                                         reset_lstm=True, log_file=None):
+    """
+    learned_opt: LearnedOptimizer from learn2learn.py
+    """
+    batch_data_processed = process_batch_data(
+        batch_data, train_rot=None, n_samples=None, is_full_traj=True)
+
+    # Reset hidden states of learned_opt
+    if reset_lstm:
+        learned_opts.reset_lstm()
+
+    # Only adapt parameters that aren't frozen
+    params = []
+    param_types = []
+    for p, ptype in zip(policy.adaptable_parameters,
+                        policy.adaptable_parameter_types):
+        if p.requires_grad:
+            params.append(p)
+            param_types.append(ptype)
+
+    losses = []
+    pred_trajs = []
+    if n_adapt_iters == 0:
+        # Don't perform any update, but return loss and predicted trajectory
         with torch.no_grad():
-            _, pred_traj = adaptation_loss(model=policy.policy_network,
-                                           batch_data_processed=batch_data_processed,
-                                           train_pos=train_pos, train_rot=train_rot,
-                                           dstep=dstep)
-        pred_trajs.append(pred_traj.detach().cpu().numpy())
+            loss, pred_traj = adaptation_loss(model=policy.policy_network,
+                                              batch_data_processed=batch_data_processed,
+                                              train_pos=train_pos, train_rot=train_rot,
+                                              dstep=dstep)
+        return [loss.item()], [pred_traj.detach().cpu().numpy()]
+
+    for iteration in range(n_adapt_iters):
+        loss, pred_traj = adaptation_loss(model=policy.policy_network,
+                                          batch_data_processed=batch_data_processed,
+                                          train_pos=train_pos, train_rot=train_rot,
+                                          dstep=dstep)
+
+        new_params, need_reset = learned_opts.step(
+            loss, params, verbose=verbose, param_types=param_types)
+
+        policy.update_obj_feats_with_grad(new_params, same_var=not need_reset)
+        if need_reset:
+            policy.policy_network.zero_grad()
+
+        # NOTE: cannot just assign params = new_params because policy's network
+        # is now using a copy of new_params, so need new reference/ptr to them
+        params = [p for p in policy.adaptable_parameters if p.requires_grad]
+
+        losses.append(loss.item())
+        if ret_trajs:
+            pred_trajs.append(pred_traj.detach().cpu().numpy())
+
+        if verbose:
+            write_log(log_file, "iter %d loss: %.3f" %
+                      (iteration, loss.item()))
+            write_log(log_file, f"params: {params}")
+
+    # Clip learned features within expected range
+    if clip_params:
+        policy.clip_adaptable_parameters()
 
     return losses, pred_trajs

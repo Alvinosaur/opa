@@ -175,18 +175,9 @@ def run_evaluation():
     # ########### (SEPARATE) Learn2Learn ###########
     learn2learn_name = "learned_opt_pos_and_rot_rand_choice"
     results_fname = os.path.join(save_dir, learn2learn_name)
-    args_path = os.path.join(
-        Params.model_root, learn2learn_name, "train_args.json")
-    with open(args_path, "r") as f:
-        learn2learn_args = json.load(f)
-    learned_opt = LearnedOptimizer(device=DEVICE, max_steps=1,
-                                   tgt_lr=learn2learn_args['tgt_lr'],
-                                   opt_lr=learn2learn_args['opt_lr'],
-                                   hidden_dim=learn2learn_args['hidden_dim'],)
-    learned_opt.load_state_dict(
-        torch.load(os.path.join(Params.model_root, learn2learn_name, "learned_opt_3.h5")))
-    learned_opt.to(DEVICE)
-    learned_opt.eval()
+    learned_opt = LearnedOptimizer.load_model(
+        folder=os.path.join(Params.model_root, learn2learn_name),
+        device=DEVICE)
 
     adaptation_func = lambda *args, **kwargs: perform_adaptation_learn2learn(
         learned_opt=learned_opt, *args, **kwargs)
