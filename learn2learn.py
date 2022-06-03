@@ -144,7 +144,7 @@ class LearnedOptimizer(nn.Module):
             offset += cur_sz
             if verbose:
                 print("Original Grad: %.3f, LSTM Grad: %.3f, New P: %.3f" % (
-                    gradients.item(), updates.item(), new_p.item()))
+                    -gradients.item(), -updates.item(), new_p.item()))
 
         # prevent computation graph from being too large
         if self.num_steps >= self.max_steps:
@@ -246,7 +246,7 @@ def train_helper(policy: Policy, learned_opt: LearnedOptimizer, batch_data, trai
     pos_requires_grad = [train_pos] * num_objects
 
     if train_rot:
-        if np.random.random() < 1.0:
+        if np.random.random() < 0.0:
             # Learn offsets
             rot_obj_types = [Params.IGNORE_ROT_IDX, Params.CARE_ROT_IDX]
             rot_requires_grad = [False] * num_objects
@@ -318,7 +318,7 @@ def train(policy: Policy, learned_opt: LearnedOptimizer, train_args, saved_root:
         root=f"data/rot_{str_3D}_train", buffer_size=buffer_size)
 
     batch_size = train_args.batch_size
-    num_epochs = 3
+    num_epochs = 7
     epochs_per_save = 1
 
     # Update over both pos and rot data one-by-one
@@ -343,20 +343,20 @@ def train(policy: Policy, learned_opt: LearnedOptimizer, train_args, saved_root:
 
         for b in (range(num_train_batches)):
             # Position parameter adaptation
-            pos_batch_indices = train_pos_indices[b *
-                                                  batch_size:(b + 1) * batch_size]
-            pos_batch_data = load_batch(train_pos_dataset, pos_batch_indices)
-            pos_losses = train_helper(
-                policy, learned_opt, pos_batch_data, train_pos=True, train_rot=False, adapt_kwargs=adapt_kwargs)
-            epoch_pos_losses += pos_losses
+            # pos_batch_indices = train_pos_indices[b *
+            #                                       batch_size:(b + 1) * batch_size]
+            # pos_batch_data = load_batch(train_pos_dataset, pos_batch_indices)
+            # pos_losses = train_helper(
+            #     policy, learned_opt, pos_batch_data, train_pos=True, train_rot=False, adapt_kwargs=adapt_kwargs)
+            # epoch_pos_losses += pos_losses
 
             # Rotation parameter adaptation
-            # rot_batch_indices = train_rot_indices[b *
-            #                                       batch_size:(b + 1) * batch_size]
-            # rot_batch_data = load_batch(train_rot_dataset, rot_batch_indices)
-            # rot_losses = train_helper(
-            #     policy, learned_opt, rot_batch_data, train_pos=False, train_rot=True, adapt_kwargs=adapt_kwargs)
-            # epoch_rot_losses += rot_losses
+            rot_batch_indices = train_rot_indices[b *
+                                                  batch_size:(b + 1) * batch_size]
+            rot_batch_data = load_batch(train_rot_dataset, rot_batch_indices)
+            rot_losses = train_helper(
+                policy, learned_opt, rot_batch_data, train_pos=False, train_rot=True, adapt_kwargs=adapt_kwargs)
+            epoch_rot_losses += rot_losses
 
             pbar.update(1)
 

@@ -12,7 +12,7 @@ class RLS(object):
         self.alpha = alpha  # learning rate
         self.H = None
 
-    def update(self, y, yhat, thetas: t.List[torch.Tensor]):
+    def update(self, y, yhat, thetas: t.List[torch.Tensor], verbose=False):
         # should be equal to x b/c loss function is squared L2 norm / 2
         # NOTE: we take gradient wrt yhat, NOT Loss = squared error
         yhat = yhat.flatten()
@@ -31,6 +31,12 @@ class RLS(object):
                               allow_unused=True, retain_graph=True)
             all_Gs.append(G)
 
+        orig_grads = None
+        if verbose:
+            debug_loss = 0.5 * (y - yhat).pow(2).mean()
+            debug_loss.backward(retain_graph=True)
+            orig_grads = [theta.grad.clone() for theta in thetas]
+
         with torch.no_grad():
             # T x num_thetas
             # https://stackoverflow.com/questions/59149275/stacking-tensors-in-a-list-of-tuples-of-tensors
@@ -43,6 +49,13 @@ class RLS(object):
             dthetas = torch.linalg.pinv(self.H) @ all_Gs.T @ e
             for i in range(len(thetas)):
                 thetas[i].data = thetas[i].data + self.alpha * dthetas[i]
+
+        if verbose:
+            debug_loss = (y - yhat).pow(2).sum()
+            debug_loss.backward()
+            for i, theta in enumerate(thetas):
+                print("Original Grad: %.3f, RLS Grad: %.3f, New P: %.3f" % (
+                    -orig_grads[i].item(), dthetas[i].item(), theta.item()))
 
 
 def second_order_grad_example():

@@ -305,7 +305,8 @@ def perform_adaptation_rls(policy: Policy, rls: RLS, batch_data: List[Tuple],
         # y_sampled = y
         # yhat_sampled = yhat
 
-        rls.update(y=y_sampled, yhat=yhat_sampled, thetas=adaptable_parameters)
+        rls.update(y=y_sampled, yhat=yhat_sampled,
+                   thetas=adaptable_parameters, verbose=verbose)
 
         loss = torch.norm(y - yhat, dim=2).mean()
         losses.append(loss.item())

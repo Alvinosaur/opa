@@ -25,7 +25,7 @@ torch.manual_seed(seed)
 random.seed(seed)
 
 cuda = torch.cuda.is_available()
-DEVICE = "cuda:0" if cuda else "cpu"
+DEVICE = "cuda:1" if cuda else "cpu"
 if cuda:
     print("CUDA GPU!")
 else:

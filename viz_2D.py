@@ -525,10 +525,10 @@ if __name__ == '__main__':
                 rls=rls, *args, **kwargs)
         elif args.use_learn2learn:
             print("Using Learn2Learn to adapt object features.")
-            save_plots_dir = f"eval_adaptation_results/learn2learn_group"
+            save_plots_dir = f"eval_adaptation_results/learn2learn_group_rand_init"
             learned_opts = LearnedOptimizerGroup(
                 pos_opt_path=os.path.join(
-                    Params.model_root, "learned_opt_pos_pref"),
+                    Params.model_root, "learned_opt_pos_pref_rand_init"),
                 rot_opt_path=os.path.join(
                     Params.model_root, "learned_opt_rot_pref_easier"),
                 rot_offset_opt_path=os.path.join(
