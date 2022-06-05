@@ -219,6 +219,9 @@ def perform_adaptation(policy: Policy, batch_data: List[Tuple],
                                           dstep=dstep)
         optimizer.zero_grad()
         loss.backward()
+        if verbose:
+            old_params = [p.clone() for p in adaptable_parameters]
+            gradients = [p.grad.clone() for p in adaptable_parameters]
         optimizer.step()
 
         losses.append(loss.item())
@@ -226,6 +229,11 @@ def perform_adaptation(policy: Policy, batch_data: List[Tuple],
             pred_trajs.append(pred_traj.detach().cpu().numpy())
 
         if verbose:
+            for old_p, new_p, grad in zip(old_params, adaptable_parameters, gradients):
+                update = new_p - old_p
+                write_log(log_file, "Original Grad: %.3f, Adam Grad: %.3f, New P: %.3f" % (
+                    -grad.item(), -update.item(), new_p.item()))
+
             write_log(log_file, "iter %d loss: %.3f" %
                       (iteration, loss.item()))
             write_log(log_file, f"params: {adaptable_parameters}")
@@ -306,7 +314,7 @@ def perform_adaptation_rls(policy: Policy, rls: RLS, batch_data: List[Tuple],
         # yhat_sampled = yhat
 
         rls.update(y=y_sampled, yhat=yhat_sampled,
-                   thetas=adaptable_parameters, verbose=verbose)
+                   thetas=adaptable_parameters, verbose=verbose, log_file=log_file)
 
         loss = torch.norm(y - yhat, dim=2).mean()
         losses.append(loss.item())
@@ -360,12 +368,14 @@ def perform_adaptation_learn2learn(policy: Policy, learned_opt, batch_data: List
                                           train_pos=train_pos, train_rot=train_rot,
                                           dstep=dstep)
 
+        is_final = iteration == n_adapt_iters - 1
         new_params, need_reset = learned_opt.step(
-            loss, params, verbose=verbose)
+            loss, params, verbose=verbose, log_file=log_file, is_final=is_final)
 
         policy.update_obj_feats_with_grad(new_params, same_var=not need_reset)
         if need_reset:
             policy.policy_network.zero_grad()
+            learned_opt.zero_grad()
 
         # NOTE: cannot just assign params = new_params because policy's network
         # is now using a copy of new_params, so need new reference/ptr to them
@@ -374,7 +384,6 @@ def perform_adaptation_learn2learn(policy: Policy, learned_opt, batch_data: List
         losses.append(loss.item())
         if ret_trajs:
             pred_trajs.append(pred_traj.detach().cpu().numpy())
-
         if verbose:
             write_log(log_file, "iter %d loss: %.3f" %
                       (iteration, loss.item()))

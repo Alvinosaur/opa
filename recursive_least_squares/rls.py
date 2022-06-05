@@ -6,13 +6,20 @@ import torch.autograd as autograd
 import typing as t
 
 
+def write_log(log_file, string):
+    print(string)
+    if log_file is not None:
+        log_file.write(string+'\n')
+        log_file.flush()
+
+
 class RLS(object):
     def __init__(self, lmbda=0.3, alpha=1e-3):
         self.lmbda = lmbda
         self.alpha = alpha  # learning rate
         self.H = None
 
-    def update(self, y, yhat, thetas: t.List[torch.Tensor], verbose=False):
+    def update(self, y, yhat, thetas: t.List[torch.Tensor], verbose=False, log_file=None):
         # should be equal to x b/c loss function is squared L2 norm / 2
         # NOTE: we take gradient wrt yhat, NOT Loss = squared error
         yhat = yhat.flatten()
@@ -51,11 +58,11 @@ class RLS(object):
                 thetas[i].data = thetas[i].data + self.alpha * dthetas[i]
 
         if verbose:
-            debug_loss = (y - yhat).pow(2).sum()
+            debug_loss = 0.5 * (y - yhat).pow(2).mean()
             debug_loss.backward()
             for i, theta in enumerate(thetas):
-                print("Original Grad: %.3f, RLS Grad: %.3f, New P: %.3f" % (
-                    -orig_grads[i].item(), dthetas[i].item(), theta.item()))
+                write_log(log_file, "Original Grad: %.3f, RLS Grad: %.3f, New P: %.3f" % (
+                    -orig_grads[i].item(), -dthetas[i].item(), theta.item()))
 
 
 def second_order_grad_example():

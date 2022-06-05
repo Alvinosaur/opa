@@ -16,7 +16,7 @@ from dataset import Dataset
 from data_params import Params
 from model import PolicyNetwork, Policy
 from train import load_batch, cuda, DEVICE
-from online_adaptation import perform_adaptation_learn2learn
+from online_adaptation import perform_adaptation_learn2learn, write_log
 
 
 def detach_var(v):
@@ -61,8 +61,10 @@ class LearnedOptimizer(nn.Module):
 
         # filled in on the first call to step()
         self.param_size = None
-        self.hidden_states = self.hidden_states_temp = None
-        self.cell_states = self.cell_states_temp = None
+        self.hidden_states1 = self.hidden_states2 = None
+        self.cell_states1 = self.cell_states2 = None
+        self.hidden_states_temp1 = self.hidden_states_temp2 = None
+        self.cell_states_temp1 = self.cell_states_temp2 = None
 
         # Optimization Info
         self.max_steps = max_steps
@@ -72,82 +74,66 @@ class LearnedOptimizer(nn.Module):
         # "Meta Optimizer" to optimize this learned optimizer's own weights
         self.meta_opt = torch.optim.Adam(self.parameters(), lr=opt_lr)
 
-    def forward(self, inp, p_indices):
-        assert self.hidden_states is not None, "Must call step() first!"
-        hidden0, cell0 = self.recurs(
-            inp, (self.hidden_states[0][p_indices], self.cell_states[0][p_indices]))
-        hidden1, cell1 = self.recurs2(
-            hidden0, (self.hidden_states[1][p_indices], self.cell_states[1][p_indices]))
+    def forward(self, inp):
+        assert self.hidden_states1 is not None, "Must call step() first!"
+        self.hidden_states1, self.cell_states1 = self.recurs(
+            inp, (self.hidden_states1, self.cell_states1))
+        self.hidden_states2, self.cell_states2 = self.recurs2(
+            self.hidden_states1, (self.hidden_states2, self.cell_states2))
+        out = self.output(self.hidden_states2)
 
-        self.hidden_states_temp[0][p_indices] = hidden0
-        self.cell_states_temp[0][p_indices] = cell0
-        self.hidden_states_temp[1][p_indices] = hidden1
-        self.cell_states_temp[1][p_indices] = cell1
-
-        return self.output(hidden1)
+        return out
 
     def reset_lstm(self):
         self.param_size = None  # Will automatically reset hidden states on the next call
 
-    def step(self, new_loss, params, verbose=False, retain_graph_override=False):
+    def step(self, new_loss, params, verbose=False, retain_graph_override=False, log_file=None, is_final=False):
         if len(params) == 0:
             return [], False
 
         if self.param_size is None:
             # Initialize hidden and cell states
             self.param_size = sum(p.numel() for p in params)
-            zero_init = [
-                Variable(torch.zeros(self.param_size, self.hidden_dim, device=self.device)) for _ in range(2)]
-            self.hidden_states = copy.deepcopy(zero_init)
-            self.hidden_states_temp = copy.deepcopy(zero_init)
-            self.cell_states = copy.deepcopy(zero_init)
-            self.cell_states_temp = copy.deepcopy(zero_init)
+            zero_init = Variable(torch.zeros(
+                self.param_size, self.hidden_dim, device=self.device))
+            self.hidden_states1 = zero_init.clone()
+            self.cell_states1 = zero_init.clone()
+            self.hidden_states2 = zero_init.clone()
+            self.cell_states2 = zero_init.clone()
 
         new_loss.backward(retain_graph=self.training or retain_graph_override)
         self.loss_to_optimize = self.loss_to_optimize + new_loss
         self.num_steps += 1
 
+        updates = None
+        gradients = torch.stack([
+            detach_var(p.grad).flatten() if p.grad is not None
+            else torch.zeros(p.numel(), device=self.device)
+            for p in params])
+
+        updates = self.forward(gradients) if updates is None else updates
+
+        # Apply learned update
         offset = 0
         new_params = []
-        for pi, p in enumerate(params):
-            cur_sz = p.numel()
-            # p_indices: [offset:offset + cur_sz]
-            if self.param_dim == 1:
-                p_indices = torch.arange(
-                    offset, offset + cur_sz, device=DEVICE)
-            else:
-                p_indices = torch.arange(pi, pi+1, device=DEVICE)
-
-            # Get original gradients and feed as input to learned optimizer
-            try:
-                if p.grad is None:
-                    raise GradIsNoneError()
-                gradients = detach_var(p.grad)
-                if self.param_dim == 1:
-                    gradients = gradients.view(cur_sz, 1)  # separate batches
-                else:
-                    gradients = gradients.view(1, cur_sz)
-
-                updates = self.forward(gradients, p_indices)
-            except GradIsNoneError:
-                # No gradients??
-                # This is possible when an object type/idx doesn't appear in a scene, so it isn't involved in computation... should only occur during training of LearnedOptimizer
-                gradients = updates = torch.zeros(cur_sz, 1, device=DEVICE)
-
-            # Apply learned update
-            new_p = p - self.tgt_lr * updates.view(*p.size())
+        for p in params:
+            update = updates[offset:offset + p.numel()].view(p.shape)
+            new_p = p - update
 
             # Ensure computation graph is preserved
             new_p.retain_grad()
-            new_params.append(new_p)
 
-            offset += cur_sz
+            new_params.append(new_p)
+            offset += p.numel()
+
             if verbose:
-                print("Original Grad: %.3f, LSTM Grad: %.3f, New P: %.3f" % (
-                    -gradients.item(), -updates.item(), new_p.item()))
+                orig_grad = gradients[offset:offset + p.numel()].view(p.shape)
+                write_log(log_file, "Original Grad: %.3f, LSTM Grad: %.3f, New P: %.3f" % (
+                    -orig_grad.item(), -update.item(), new_p.item()))
 
         # prevent computation graph from being too large
-        if self.num_steps >= self.max_steps:
+        need_detach = False
+        if self.num_steps >= self.max_steps or is_final:
             need_detach = True
             self.num_steps = 0
             if self.training:
@@ -156,17 +142,15 @@ class LearnedOptimizer(nn.Module):
                 self.meta_opt.step()
 
             # reset computation graph
+            del self.loss_to_optimize
+            del new_loss
             self.loss_to_optimize = 0.0
             torch.cuda.empty_cache()
 
-            self.hidden_states = [detach_var(v)
-                                  for v in self.hidden_states_temp]
-            self.cell_states = [detach_var(v) for v in self.cell_states_temp]
-
-        else:
-            need_detach = False
-            self.hidden_states = self.hidden_states_temp
-            self.cell_states = self.cell_states_temp
+            self.hidden_states1 = detach_var(self.hidden_states1)
+            self.cell_states1 = detach_var(self.cell_states1)
+            self.hidden_states2 = detach_var(self.hidden_states2)
+            self.cell_states2 = detach_var(self.cell_states2)
 
         return new_params, need_detach
 
@@ -199,7 +183,7 @@ class LearnedOptimizerGroup(object):
         self.rot_opt.reset_lstm()
         self.rot_offset_opt.reset_lstm()
 
-    def step(self, new_loss, params, param_types, verbose=False):
+    def step(self, new_loss, params, param_types, verbose=False, log_file=None):
         # separate params into pos, rot, and rot_offset
         pos_params, rot_params, rot_offset_params = [], [], []
         pos_param_idxs, rot_param_idxs, rot_offset_param_idxs = [], [], []
@@ -217,11 +201,12 @@ class LearnedOptimizerGroup(object):
                 raise ValueError("Unknown param type")
 
         pos_params, need_detach_pos = self.pos_opt.step(
-            new_loss, pos_params, verbose=verbose, retain_graph_override=True)
+            new_loss, pos_params, verbose=verbose, retain_graph_override=True, log_file=log_file)
         rot_params, need_detach_rot = self.rot_opt.step(
-            new_loss, rot_params, verbose=verbose, retain_graph_override=True)
+            new_loss, rot_params, verbose=verbose, retain_graph_override=True,
+            log_file=log_file)
         rot_offset_params, need_detach_rot_offset = self.rot_offset_opt.step(
-            new_loss, rot_offset_params, verbose=verbose, retain_graph_override=False)
+            new_loss, rot_offset_params, verbose=verbose, retain_graph_override=False, log_file=log_file)
 
         # combine params back into list
         new_params = [None] * len(params)
@@ -246,7 +231,7 @@ def train_helper(policy: Policy, learned_opt: LearnedOptimizer, batch_data, trai
     pos_requires_grad = [train_pos] * num_objects
 
     if train_rot:
-        if np.random.random() < 0.0:
+        if np.random.random() < 1.0:
             # Learn offsets
             rot_obj_types = [Params.IGNORE_ROT_IDX, Params.CARE_ROT_IDX]
             rot_requires_grad = [False] * num_objects
@@ -274,7 +259,6 @@ def train_helper(policy: Policy, learned_opt: LearnedOptimizer, batch_data, trai
                          pos_requires_grad=pos_requires_grad, rot_requires_grad=rot_requires_grad,
                          rot_offset_requires_grad=rot_offset_requires_grad,
                          use_rand_init=True)
-
     losses, _ = perform_adaptation_learn2learn(policy, learned_opt, batch_data,
                                                train_pos=train_pos, train_rot=train_rot,
                                                **adapt_kwargs)
@@ -343,20 +327,24 @@ def train(policy: Policy, learned_opt: LearnedOptimizer, train_args, saved_root:
 
         for b in (range(num_train_batches)):
             # Position parameter adaptation
-            # pos_batch_indices = train_pos_indices[b *
-            #                                       batch_size:(b + 1) * batch_size]
-            # pos_batch_data = load_batch(train_pos_dataset, pos_batch_indices)
-            # pos_losses = train_helper(
-            #     policy, learned_opt, pos_batch_data, train_pos=True, train_rot=False, adapt_kwargs=adapt_kwargs)
-            # epoch_pos_losses += pos_losses
+            if opt_args.train_pos:
+                pos_batch_indices = train_pos_indices[b *
+                                                      batch_size:(b + 1) * batch_size]
+                pos_batch_data = load_batch(
+                    train_pos_dataset, pos_batch_indices)
+                pos_losses = train_helper(
+                    policy, learned_opt, pos_batch_data, train_pos=True, train_rot=False, adapt_kwargs=adapt_kwargs)
+                epoch_pos_losses += pos_losses
 
             # Rotation parameter adaptation
-            rot_batch_indices = train_rot_indices[b *
-                                                  batch_size:(b + 1) * batch_size]
-            rot_batch_data = load_batch(train_rot_dataset, rot_batch_indices)
-            rot_losses = train_helper(
-                policy, learned_opt, rot_batch_data, train_pos=False, train_rot=True, adapt_kwargs=adapt_kwargs)
-            epoch_rot_losses += rot_losses
+            if opt_args.train_rot:
+                rot_batch_indices = train_rot_indices[b *
+                                                      batch_size:(b + 1) * batch_size]
+                rot_batch_data = load_batch(
+                    train_rot_dataset, rot_batch_indices)
+                rot_losses = train_helper(
+                    policy, learned_opt, rot_batch_data, train_pos=False, train_rot=True, adapt_kwargs=adapt_kwargs)
+                epoch_rot_losses += rot_losses
 
             pbar.update(1)
 
@@ -414,6 +402,8 @@ def parse_arguments():
                         type=str, help="trained model name", required=True)
     parser.add_argument('--loaded_epoch', action='store', type=int,
                         default=0, help="training epoch of pretrained model to load from")
+    parser.add_argument('--train_rot', action='store_true')
+    parser.add_argument('--train_pos', action='store_true')
 
     # Default hyperparameters used for paper experiments, no need to tune to reproduce
     parser.add_argument('--lr', action='store', type=float,
@@ -424,7 +414,9 @@ def parse_arguments():
     # hidden_dim, max_steps, tgt_lr, opt_lr
     parser.add_argument('--hidden_dim', action='store', type=int, default=32)
     parser.add_argument('--max_steps', action='store', type=int, default=5,
-                        help="max number of consecutive gradient steps to take under same computation graph. Same as K for K-shot adaptation.")
+                        help="max number of consecutive gradient steps to take under same computation graph.")
+    parser.add_argument('--max_unroll', action='store', type=int, default=None,
+                        help="max number of steps to unroll computation graph. If not specified, defaults to each --max_steps")
     parser.add_argument('--tgt_lr', action='store', type=float, default=1e-1,
                         help="learning rate for the optimization target(policy params)")
     parser.add_argument('--opt_lr', action='store', type=float, default=1e-3,
@@ -458,11 +450,12 @@ if __name__ == "__main__":
     network.to(DEVICE)
     policy = Policy(network)
 
+    if opt_args.max_unroll is None:
+        opt_args.max_unroll = opt_args.max_steps
     learned_opt = LearnedOptimizer(
-        device=DEVICE, max_steps=opt_args.max_steps, hidden_dim=opt_args.hidden_dim)  # param_dim=4
+        device=DEVICE, max_steps=opt_args.max_unroll, hidden_dim=opt_args.hidden_dim, tgt_lr=1e-3)  # param_dim=4
     learned_opt.to(DEVICE)
 
-    # Set K-shot adaptation K = max_steps, meaning that learned optimizer only performs its own gradient update once per sample
     n_adapt_iters = opt_args.max_steps
     # dist of each rollout step of policy
     dstep = Params.dstep_3D if is_3D else Params.dstep_2D
@@ -471,6 +464,7 @@ if __name__ == "__main__":
 
     # Run training
     # torch.autograd.set_detect_anomaly(True)
+    assert opt_args.train_pos or opt_args.train_rot  # at least one should be true
     train(policy, learned_opt,
           saved_root=os.path.join(Params.model_root, opt_args.opt_name),
           train_args=opt_args,

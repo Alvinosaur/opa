@@ -681,20 +681,20 @@ class Policy(object):
             self.obj_rot_offsets = [detach_tensor(v) for v in obj_rot_offsets]
 
         self.policy_network.pos_pref_feat_test = self.obj_pos_feats + [
-            torch.clone(self.policy_network.pos_pref_feat_train[Params.GOAL_IDX]).data]
+            detach_tensor(self.policy_network.pos_pref_feat_train[Params.GOAL_IDX])]
         self.policy_network.pos_pref_feat_test[-1].requires_grad = False
 
         self.policy_network.rot_pref_feat_test = self.obj_rot_feats + [
-            torch.clone(
-                self.policy_network.rot_pref_feat_train[Params.START_IDX]).data,
-            torch.clone(self.policy_network.rot_pref_feat_train[Params.GOAL_IDX]).data]
+            detach_tensor(
+                self.policy_network.rot_pref_feat_train[Params.START_IDX]),
+            detach_tensor(self.policy_network.rot_pref_feat_train[Params.GOAL_IDX])]
         self.policy_network.rot_pref_feat_test[-2].requires_grad = False
         self.policy_network.rot_pref_feat_test[-1].requires_grad = False
 
         self.policy_network.rot_offsets_test = self.obj_rot_offsets + [
-            torch.clone(
-                self.policy_network.rot_offsets_train[Params.START_IDX]).data,
-            torch.clone(self.policy_network.rot_offsets_train[Params.GOAL_IDX]).data]
+            detach_tensor(
+                self.policy_network.rot_offsets_train[Params.START_IDX]),
+            detach_tensor(self.policy_network.rot_offsets_train[Params.GOAL_IDX])]
         self.policy_network.rot_offsets_test[-2].requires_grad = False
         self.policy_network.rot_offsets_test[-1].requires_grad = False
 
