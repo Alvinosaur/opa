@@ -5,13 +5,13 @@ import matplotlib.pyplot as plt
 import re
 
 
-model = "Adam"
+model = "RLS"
 
 if model == "LSTM":
     model_name = "learn2learn_rand_init"
     model_title = "Learn2Learn"
 elif model == "RLS":
-    alpha = 0.8
+    alpha = 0.5
     lmbda = 0.4
     model_name = "RLS(alpha_%.1f_lmbda_%.1f)" % (alpha, lmbda)
     model_title = model_name
@@ -22,17 +22,18 @@ else:
     raise NotImplementedError
 
 
-# num_steps = 32  # [0, ..., 31]
-num_steps = 32
+num_steps = 32  # [0, ..., 31]
+# num_steps = 22
 # num_samples = 10  # only show first 10 samples for clarity
 
 # data_name = "pos"
 # data_name = "rot"
 data_name = "rot_ignore"
 
-# data_type = "pos pref"
-# data_type = "rot pref"
-data_type = "rot offset"
+# data_type = "pos attract"
+# data_type = "pos repel"
+data_type = "rot pref"
+# data_type = "rot offset"
 
 folder = "/home/alvin/research/intelligent_control_lab/human_robot_interaction/opa/eval_adaptation_results/%s_%s" % (
     model_name, data_name)
@@ -73,11 +74,20 @@ pattern = r"Original Grad: ([-+]?\d+.\d+), Pred Grad: ([-+]?\d+.\d+), New P: ([-
 matches = re.findall(pattern, text)
 orig_grads = [float(i) for i, _, _ in matches]
 pred_grads = [float(i) for _, i, _ in matches]
-orig_grad_pref = np.array(orig_grads[0::2])
-pred_grad_pref = np.array(pred_grads[0::2])
-if data_type == "rot offset":
-    orig_grad_offset = np.array(orig_grads[1::2])
-    pred_grad_offset = np.array(pred_grads[1::2])
+
+if data_name in ["rot", "rot_ignore"]:
+    orig_grad_pref = np.array(orig_grads[0::2])
+    pred_grad_pref = np.array(pred_grads[0::2])
+    if data_type == "rot offset":
+        orig_grad_offset = np.array(orig_grads[1::2])
+        pred_grad_offset = np.array(pred_grads[1::2])
+else:
+    if data_type == "pos repel":
+        orig_grad_pref = np.array(orig_grads[0::2])
+        pred_grad_pref = np.array(pred_grads[0::2])
+    else:
+        orig_grad_pref = np.array(orig_grads[1::2])
+        pred_grad_pref = np.array(pred_grads[1::2])
 
 pattern = r"Target params: \[(.*)\]"
 target_param_strs = re.findall(pattern, text)
@@ -98,26 +108,44 @@ for sample_i in range(target_params.shape[0]):
     start_step, end_step = vlines[sample_i], vlines[sample_i+1]
     ts = np.arange(start_step, end_step)
 
-    if data_type != "rot offset":
-        target_pref = target_params[sample_i, 0]
-        ax0.hlines(y=target_pref, xmin=start_step, xmax=end_step,
-                   linestyles="dashed", label="Target Pref", color="tab:green")
+    if data_name in ["rot", "rot_ignore"]:
+        if data_type == "rot pref":
+            target_pref = target_params[sample_i, 0]
+            ax0.hlines(y=target_pref, xmin=start_step, xmax=end_step,
+                       linestyles="dashed", label="Target Pref", color="tab:green")
+        else:
+            try:
+                target_offset = target_params[sample_i, 1]
+                ax0.hlines(y=target_offset, xmin=start_step, xmax=end_step,
+                           linestyles="dashed", label="Target Offset", color="tab:red")
+            except:
+                # This only happens when plotting rot offset of samples that involve the Rotation Ignored object which has no target offset
+                pass
     else:
-        try:
-            target_offset = target_params[sample_i, 1]
-            ax0.hlines(y=target_offset, xmin=start_step, xmax=end_step,
-                       linestyles="dashed", label="Target Offset", color="tab:red")
-        except:
-            # This only happens when plotting rot offset of samples that involve the Rotation Ignored object which has no target offset
-            pass
+        if data_type == "pos repel":
+            target_pref = target_params[sample_i, 0]
+            ax0.hlines(y=target_pref, xmin=start_step, xmax=end_step,
+                       linestyles="dashed", label="Target Pref", color="tab:green")
+        else:
+            target_pref = target_params[sample_i, 1]
+            ax0.hlines(y=target_pref, xmin=start_step, xmax=end_step,
+                       linestyles="dashed", label="Target Pref", color="tab:green")
 
     cur_params = actual_params[start_step:end_step]
-    if data_type != "rot offset":
-        actual_pref = cur_params[:, 0]
-        ax0.plot(ts, actual_pref, label="Actual Pref", color="tab:green")
+    if data_name in ["rot", "rot_ignore"]:
+        if data_type != "rot offset":
+            actual_pref = cur_params[:, 0]
+            ax0.plot(ts, actual_pref, label="Actual Pref", color="tab:green")
+        else:
+            actual_offset = cur_params[:, 1]
+            ax0.plot(ts, actual_offset, label="Actual Offset", color="tab:red")
     else:
-        actual_offset = cur_params[:, 1]
-        ax0.plot(ts, actual_offset, label="Actual Offset", color="tab:red")
+        if data_type == "pos repel":
+            actual_pref = cur_params[:, 0]
+            ax0.plot(ts, actual_pref, label="Actual Pref", color="tab:green")
+        else:
+            actual_pref = cur_params[:, 1]
+            ax0.plot(ts, actual_pref, label="Actual Pref", color="tab:green")
 
     if data_type != "rot offset":
         # no grad for last timestep/param
@@ -142,7 +170,7 @@ for x in vlines:
 # Show legend labels without duplicates
 handles, labels = ax0.get_legend_handles_labels()
 by_label = dict(zip(labels, handles))
-ax0.legend(by_label.values(), by_label.keys())
+ax0.legend(by_label.values(), by_label.keys(), loc="lower left")
 
 ax1.set_ylabel("Loss")
 fig.suptitle(model_title + " " + data_type)

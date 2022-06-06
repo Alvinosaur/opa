@@ -19,7 +19,7 @@ class RLS(object):
         self.alpha = alpha  # learning rate
         self.H = None
 
-    def update(self, y, yhat, thetas: t.List[torch.Tensor], verbose=False, log_file=None):
+    def update(self, y, yhat, model, thetas: t.List[torch.Tensor], verbose=False, log_file=None):
         # should be equal to x b/c loss function is squared L2 norm / 2
         # NOTE: we take gradient wrt yhat, NOT Loss = squared error
         yhat = yhat.flatten()
@@ -38,8 +38,18 @@ class RLS(object):
                               allow_unused=True, retain_graph=True)
             all_Gs.append(G)
 
+            # Must reset gradients otherwise they accumulate
+            for t in thetas:
+                t.grad = None
+            if model is not None:
+                model.zero_grad()
+
         orig_grads = None
         if verbose:
+            for t in thetas:
+                t.grad = None
+            if model is not None:
+                model.zero_grad()
             debug_loss = 0.5 * (y - yhat).pow(2).mean()
             debug_loss.backward(retain_graph=True)
             orig_grads = [theta.grad.clone() for theta in thetas]
