@@ -61,8 +61,9 @@ class RLS(object):
             debug_loss = 0.5 * (y - yhat).pow(2).mean()
             debug_loss.backward()
             for i, theta in enumerate(thetas):
-                write_log(log_file, "Original Grad: %.3f, RLS Grad: %.3f, New P: %.3f" % (
-                    -orig_grads[i].item(), -dthetas[i].item(), theta.item()))
+                # NOTE: +dtheta because dtheta already points to minimize loss
+                write_log(log_file, "Original Grad: %.3f, Pred Grad: %.3f, New P: %.3f" % (
+                    -orig_grads[i].item(), +dthetas[i].item() / self.alpha, theta.item()))
 
 
 def second_order_grad_example():

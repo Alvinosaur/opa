@@ -5,58 +5,149 @@ import matplotlib.pyplot as plt
 import re
 
 
-folder = "/home/ashek/research/hri/opa/eval_adaptation_results/RLS(alpha_0.5_lmbda_0.4)_pos"
+model = "Adam"
+
+if model == "LSTM":
+    model_name = "learn2learn_rand_init"
+    model_title = "Learn2Learn"
+elif model == "RLS":
+    alpha = 0.8
+    lmbda = 0.4
+    model_name = "RLS(alpha_%.1f_lmbda_%.1f)" % (alpha, lmbda)
+    model_title = model_name
+elif model == "Adam":
+    model_name = "Adam"
+    model_title = model_name
+else:
+    raise NotImplementedError
+
+
+# num_steps = 32  # [0, ..., 31]
+num_steps = 32
+# num_samples = 10  # only show first 10 samples for clarity
+
+# data_name = "pos"
+# data_name = "rot"
+data_name = "rot_ignore"
+
+# data_type = "pos pref"
+# data_type = "rot pref"
+data_type = "rot offset"
+
+folder = "/home/alvin/research/intelligent_control_lab/human_robot_interaction/opa/eval_adaptation_results/%s_%s" % (
+    model_name, data_name)
 fname = os.path.join(folder, "qualitative_output.txt")
-# applied_lr = 1e-1  # LSTM lr
-applied_lr = 0.5  # RLS Alpha
-# applied_lr = 1  # Adam, NOTE: we directly measure new_p - old_p, lr already applied
-num_steps = 31  # [0, ..., 30]
-# num_steps = 11
-# target_value = -1.07  # ROT IGNORE
-target_value = 1.33  # ROT CARE
-# target_value = np.pi/2  # ROT OFFSET
-# target_value = 1.18  # POS REPEL
-# target_value = 0.27  # POS ATTRACT
 with open(fname, "r") as f:
     text = f.read()
 
 pattern = r"iter (\d+) loss: (\d+\.\d+)"
 matches = re.findall(pattern, text)
-matches = [(int(i), float(loss)) for i, loss in matches]
-max_iters = max(matches, key=lambda x: x[0])[0]
+iter_losses = np.array([(int(i), float(loss)) for i, loss in matches])
+max_iters = int(iter_losses[:, 0].max())
 
 # matches = [(i, v) for i, v in matches if v > 0.02]
-losses = np.zeros(max_iters + 1)
-for i, loss in matches:
-    losses[i] = loss
+sum_losses = np.zeros(max_iters + 1)
+counts = np.zeros(max_iters + 1)
+for i, loss in iter_losses:
+    sum_losses[int(i)] += loss
+    counts[int(i)] += 1
 
-plt.plot(losses)
-plt.title("Test Time Adaptation Loss vs Update Iter for Pos")
+avg_losses = sum_losses / counts
+
+plt.plot(avg_losses, color="black")
+plt.title(model_title + " Loss vs Iter")
 plt.xlabel("Update Iteration")
 plt.ylabel("Loss")
+plt.tight_layout()
+fig = plt.gcf()
+fig.set_size_inches(4, 4, forward=True)
 plt.savefig(os.path.join(
-    folder, "adaptation_loss_vs_update_iter.png"))
+    folder, "%s_loss_vs_iter.png" % (model_title)), dpi=100)
+# plt.show()
+plt.clf()
 
-pattern = r"Original Grad: ([-+]?\d+.\d+), LSTM Grad: ([-+]?\d+.\d+), New P: ([-+]?\d+.\d+)"
+###############################################################################
+fig, (ax0, ax1) = plt.subplots(nrows=2, ncols=1, figsize=(10, 5),
+                               gridspec_kw={'height_ratios': [3, 1]})  # type: ignore
+pattern = r"Original Grad: ([-+]?\d+.\d+), Pred Grad: ([-+]?\d+.\d+), New P: ([-+]?\d+.\d+)"
 matches = re.findall(pattern, text)
-matches = [(float(i), float(j), float(k)) for i, j, k in matches]
+orig_grads = [float(i) for i, _, _ in matches]
+pred_grads = [float(i) for _, i, _ in matches]
+orig_grad_pref = np.array(orig_grads[0::2])
+pred_grad_pref = np.array(pred_grads[0::2])
+if data_type == "rot offset":
+    orig_grad_offset = np.array(orig_grads[1::2])
+    pred_grad_offset = np.array(pred_grads[1::2])
 
-# only look at every other output to get the 2nd param
-start = 0  # 1: 1, 3, 5, ... or 0: 0, 2, 4, ...
-matches = matches[start::2]
+pattern = r"Target params: \[(.*)\]"
+target_param_strs = re.findall(pattern, text)
+target_params = np.vstack([np.fromstring(s, dtype=float, sep=", ")
+                           for s in target_param_strs])
+
+pattern = r"Actual params: \[(.*)\]"
+actual_param_strs = re.findall(pattern, text)
+actual_params = np.vstack([np.fromstring(s, dtype=float, sep=", ")
+                           for s in actual_param_strs])
 
 # look at a specific example
 matches = matches[:]
 
-vlines = np.arange(0, len(matches)+1, num_steps)
+vlines = np.arange(0, len(actual_params)+1, num_steps)
+grad_i = 0
+for sample_i in range(target_params.shape[0]):
+    start_step, end_step = vlines[sample_i], vlines[sample_i+1]
+    ts = np.arange(start_step, end_step)
 
-plt.plot([-v[0] for v in matches], label="-1 * Original Grad")
-plt.plot([-applied_lr * v[1] for v in matches], label="-lr * Pred Grad")
-plt.plot([v[2] for v in matches], label="New P")
-plt.hlines(y=target_value, xmin=0, xmax=len(matches),
-           linestyles="dashed", label="Target P")
+    if data_type != "rot offset":
+        target_pref = target_params[sample_i, 0]
+        ax0.hlines(y=target_pref, xmin=start_step, xmax=end_step,
+                   linestyles="dashed", label="Target Pref", color="tab:green")
+    else:
+        try:
+            target_offset = target_params[sample_i, 1]
+            ax0.hlines(y=target_offset, xmin=start_step, xmax=end_step,
+                       linestyles="dashed", label="Target Offset", color="tab:red")
+        except:
+            # This only happens when plotting rot offset of samples that involve the Rotation Ignored object which has no target offset
+            pass
+
+    cur_params = actual_params[start_step:end_step]
+    if data_type != "rot offset":
+        actual_pref = cur_params[:, 0]
+        ax0.plot(ts, actual_pref, label="Actual Pref", color="tab:green")
+    else:
+        actual_offset = cur_params[:, 1]
+        ax0.plot(ts, actual_offset, label="Actual Offset", color="tab:red")
+
+    if data_type != "rot offset":
+        # no grad for last timestep/param
+        ax0.plot(ts[:-1], orig_grad_pref[grad_i:grad_i+num_steps-1],
+                 label="-1 * Orig Grad Pref", color="tab:blue", linestyle="dashed")
+        ax0.plot(ts[:-1], pred_grad_pref[grad_i:grad_i+num_steps-1],
+                 label="-1 * Pred Grad Pref", color="tab:blue")
+    else:
+        ax0.plot(ts[:-1], orig_grad_offset[grad_i:grad_i+num_steps-1],
+                 label="-1 * Orig Grad Rot Offset", color="tab:orange", linestyle="dashed")
+        ax0.plot(ts[:-1], pred_grad_offset[grad_i:grad_i+num_steps-1],
+                 label="-1 * Pred Grad Rot Offset", color="tab:orange")
+
+    ax1.plot(ts[:-1], iter_losses[grad_i:grad_i +
+             num_steps-1, 1], color="black")
+
+    grad_i += num_steps - 1
+
 for x in vlines:
-    plt.axvline(x=x, linestyle="dashed", color="black", alpha=0.5)
-plt.legend()
-plt.title("Rot Pref")
-plt.show()
+    ax0.axvline(x=x, linestyle="dashed", color="black", alpha=0.3)
+
+# Show legend labels without duplicates
+handles, labels = ax0.get_legend_handles_labels()
+by_label = dict(zip(labels, handles))
+ax0.legend(by_label.values(), by_label.keys())
+
+ax1.set_ylabel("Loss")
+fig.suptitle(model_title + " " + data_type)
+ax0.set_ylim([-2, 2])
+plt.tight_layout()
+plt.savefig(os.path.join(folder, "%s_params_and_grad.png" %
+            data_type), dpi=100)
+# plt.show()

@@ -18,7 +18,7 @@ import matplotlib.colors as mcolors
 import torch
 from learn2learn import LearnedOptimizer, LearnedOptimizerGroup
 
-from online_adaptation import perform_adaptation, perform_adaptation_rls, perform_adaptation_learn2learn, perform_adaptation_learn2learn_group, DEVICE
+from online_adaptation import perform_adaptation, perform_adaptation_rls, perform_adaptation_learn2learn, perform_adaptation_learn2learn_group, write_log, params2str, DEVICE
 from elastic_band import Object
 from data_params import Params
 from model import Policy, PolicyNetwork, pose_to_model_input, decode_ori
@@ -374,7 +374,7 @@ def viz_main(policy: Policy, test_data_root: str, calc_pos, calc_rot):
                    objects=objects, expert_traj=expert_traj, ax=ax, viz_args=viz_args)
 
 
-def viz_adaptation(policy: Policy, num_updates, test_data_root: str, train_pos, train_rot, adaptation_func, save_plots_dir=None, log_file=None):
+def viz_adaptation(policy: Policy, num_updates, test_data_root: str, train_pos, train_rot, is_rot_ignore, adaptation_func, save_res_dir=None, log_file=None):
     """
     Visually evalutes 2D policy with varying number of adaptation steps, where
     adaptation is performed directly on expert data.
@@ -392,12 +392,26 @@ def viz_adaptation(policy: Policy, num_updates, test_data_root: str, train_pos, 
     num_updates_series = list(range(num_updates + 1))
 
     N = 10
-    for sample_i in range(N):
+    sample_i = 0
+    seen = set()
+    while sample_i < N:
         # Load data
-        rand_file_idx = np.random.choice(100)
-        print("file idx: %d" % rand_file_idx)
+        rand_file_idx = np.random.choice(3000)
+        if rand_file_idx in seen:
+            continue
         data = np.load(os.path.join(test_data_root, "traj_%d.npz" %
                        rand_file_idx), allow_pickle=True)
+        object_types = data["object_types"]
+        if train_rot:
+            if is_rot_ignore and object_types[0] != Params.IGNORE_ROT_IDX:
+                continue
+            if not is_rot_ignore and object_types[0] != Params.CARE_ROT_IDX:
+                continue
+
+        print("OBJECT TYPES: ", object_types)
+        seen.add(rand_file_idx)
+        sample_i += 1
+        print("file idx: %d" % rand_file_idx)
         assert data["is_rot"].item() == train_rot
         expert_traj = data["states"]
         T = expert_traj.shape[0]
@@ -405,7 +419,6 @@ def viz_adaptation(policy: Policy, num_updates, test_data_root: str, train_pos, 
         object_poses = data["object_poses"]
         object_radii = data["object_radii"]
         # NOTE: this is purely for viz, model should NOT know this!
-        object_types = data["object_types"]
         theta_offsets = Params.ori_offsets_2D[object_types]
         start = expert_traj[0]
         goal = expert_traj[-1]
@@ -432,10 +445,26 @@ def viz_adaptation(policy: Policy, num_updates, test_data_root: str, train_pos, 
         rot_obj_types = [None] * num_objects  # None means no rot preference
         rot_requires_grad = [train_rot] * num_objects
         policy.init_new_objs(pos_obj_types=pos_obj_types, rot_obj_types=rot_obj_types,
-                             pos_requires_grad=pos_requires_grad, rot_requires_grad=rot_requires_grad)
+                             pos_requires_grad=pos_requires_grad, rot_requires_grad=rot_requires_grad, use_rand_init=True)
 
         # Observe model performance after various number of update steps
         total_updates = max(num_updates_series) + 1
+        if train_pos:
+            target_params = [
+                policy.policy_network.pos_pref_feat_train[Params.REPEL_IDX],
+                policy.policy_network.pos_pref_feat_train[Params.ATTRACT_IDX]
+            ]
+        else:
+            if object_types[0] == Params.IGNORE_ROT_IDX:
+                target_params = [
+                    policy.policy_network.rot_pref_feat_train[object_types[0]],
+                ]
+            else:
+                target_params = [
+                    policy.policy_network.rot_pref_feat_train[object_types[0]],
+                    Params.ori_offsets_2D[Params.CARE_ROT_IDX],
+                ]
+        write_log(log_file, f"Target params: {params2str(target_params)}")
         _, pred_trajs = adaptation_func(policy=policy, batch_data=[batch_data],
                                         train_pos=train_pos, train_rot=train_rot,
                                         n_adapt_iters=total_updates, dstep=Params.dstep_2D,
@@ -449,8 +478,8 @@ def viz_adaptation(policy: Policy, num_updates, test_data_root: str, train_pos, 
             pred_traj = np.hstack([pred_traj[:, :POS_DIM],
                                    np.arctan2(pred_traj[:, -1], pred_traj[:, -2])[:, np.newaxis]])
 
-            if save_plots_dir is not None:
-                save_path = os.path.join(save_plots_dir,
+            if save_res_dir is not None:
+                save_path = os.path.join(save_res_dir,
                                          f"sample_{sample_i}_adapt_step_{update_i}.png")
             else:
                 save_path = None
@@ -470,9 +499,10 @@ def parse_arguments():
     parser.add_argument('--loaded_epoch', action='store', type=int, default=-1)
     parser.add_argument('--num_updates', action='store', type=int, default=4)
     parser.add_argument('--calc_rot', action='store_true',
-                        help="calculate position")
-    parser.add_argument('--calc_pos', action='store_true',
                         help="calculate rotation")
+    parser.add_argument('--is_rot_ignore', action='store_true')
+    parser.add_argument('--calc_pos', action='store_true',
+                        help="calculate position")
     parser.add_argument('--adapt', action='store_true',
                         help="Viz adaptation. If False, viz policy with pretrained object features.")
     parser.add_argument('--use_sgd', action='store_true',
@@ -519,13 +549,13 @@ if __name__ == '__main__':
             lmbda = 0.4
             print(
                 f"Using RLS(alpha_{alpha}_lmbda_{lmbda}) to adapt object features.")
-            save_plots_dir = f"eval_adaptation_results/RLS(alpha_{alpha}_lmbda_{lmbda})"
+            save_res_dir = f"eval_adaptation_results/RLS(alpha_{alpha}_lmbda_{lmbda})"
             rls = RLS(alpha=alpha, lmbda=lmbda)
             adaptation_func = lambda *args, **kwargs: perform_adaptation_rls(
                 rls=rls, *args, **kwargs)
         elif args.use_learn2learn:
             print("Using Learn2Learn to adapt object features.")
-            save_plots_dir = f"eval_adaptation_results/learn2learn_group_rand_init"
+            save_res_dir = f"eval_adaptation_results/learn2learn_group_rand_init"
             learned_opts = LearnedOptimizerGroup(
                 pos_opt_path=os.path.join(
                     Params.model_root, "learned_opt_pos_pref_rand_init"),
@@ -541,11 +571,11 @@ if __name__ == '__main__':
             # learned_opt.to(DEVICE)
             # learned_opt.train()
             # if args.learn2learn_name is not None:
-            #     save_plots_dir = f"eval_adaptation_results/{args.model_name}"
+            #     save_res_dir = f"eval_adaptation_results/{args.model_name}"
             #     learned_opt.load_state_dict(
             #         torch.load(os.path.join(Params.model_root, args.model_name, args.learn2learn_name)))
             # else:
-            #     save_plots_dir = None
+            #     save_res_dir = None
             #     print(
             #         "WARNING: No learned optimizer name provided. Using random init weights!")
             # adaptation_func = lambda *args, **kwargs: perform_adaptation_learn2learn(
@@ -554,23 +584,25 @@ if __name__ == '__main__':
             print("Using SGD to adapt object features.")
             adaptation_func = lambda *args, **kwargs: perform_adaptation(
                 Optimizer=torch.optim.SGD, *args, **kwargs)
-            save_plots_dir = "eval_adaptation_results/SGD"
+            save_res_dir = "eval_adaptation_results/SGD"
         else:
             print("Using Adam to adapt object features.")
             adaptation_func = lambda *args, **kwargs: perform_adaptation(
                 Optimizer=torch.optim.Adam, *args, **kwargs)
-            save_plots_dir = "eval_adaptation_results/Adam"
+            save_res_dir = "eval_adaptation_results/Adam"
 
-        if save_plots_dir is not None:
+        if save_res_dir is not None:
             if args.calc_pos:
-                save_plots_dir += "_pos"
+                save_res_dir += "_pos"
             if args.calc_rot:
-                save_plots_dir += "_rot"
-            os.makedirs(save_plots_dir, exist_ok=True)
-            log_file = open(f"{save_plots_dir}/qualitative_output.txt", "w")
+                save_res_dir += "_rot"
+            if args.is_rot_ignore:
+                save_res_dir += "_ignore"
+            os.makedirs(f"{save_res_dir}/samples", exist_ok=True)
+            log_file = open(f"{save_res_dir}/qualitative_output.txt", "w")
         else:
             log_file = None
 
         viz_adaptation(policy, args.num_updates, test_data_root,
                        train_pos=args.calc_pos, train_rot=args.calc_rot,
-                       adaptation_func=adaptation_func, save_plots_dir=save_plots_dir, log_file=log_file)
+                       adaptation_func=adaptation_func, is_rot_ignore=args.is_rot_ignore, save_res_dir=f"{save_res_dir}/samples", log_file=log_file)

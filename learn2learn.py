@@ -105,20 +105,22 @@ class LearnedOptimizer(nn.Module):
         self.loss_to_optimize = self.loss_to_optimize + new_loss
         self.num_steps += 1
 
-        updates = None
         gradients = torch.stack([
             detach_var(p.grad).flatten() if p.grad is not None
             else torch.zeros(p.numel(), device=self.device)
             for p in params])
-
-        updates = self.forward(gradients) if updates is None else updates
+        pred_gradients = self.forward(gradients)
 
         # Apply learned update
         offset = 0
         new_params = []
         for p in params:
-            update = updates[offset:offset + p.numel()].view(p.shape)
-            new_p = p - update
+            if p.grad is not None:
+                pred_grad = pred_gradients[offset:offset +
+                                           p.numel()].view(p.shape)
+                new_p = p - self.tgt_lr * pred_grad
+            else:
+                new_p = p
 
             # Ensure computation graph is preserved
             new_p.retain_grad()
@@ -127,9 +129,10 @@ class LearnedOptimizer(nn.Module):
             offset += p.numel()
 
             if verbose:
+                # NOTE: divide printed update by tgt_lr to get predicted gradient agnostic of the learning rate used)
                 orig_grad = gradients[offset:offset + p.numel()].view(p.shape)
-                write_log(log_file, "Original Grad: %.3f, LSTM Grad: %.3f, New P: %.3f" % (
-                    -orig_grad.item(), -update.item(), new_p.item()))
+                write_log(log_file, "Original Grad: %.3f, Pred Grad: %.3f, New P: %.3f" % (
+                    -orig_grad.item(), -pred_grad.item() / self.tgt_lr, new_p.item()))
 
         # prevent computation graph from being too large
         need_detach = False

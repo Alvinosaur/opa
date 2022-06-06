@@ -17,6 +17,11 @@ def write_log(log_file, string):
         log_file.flush()
 
 
+def params2str(params):
+    params = np.array([float(v) for v in params])
+    return np.array2string(params, precision=4, separator=', ')
+
+
 def model_rollout(goal_tensors, current_inputs, start_tensors, goal_rot_inputs,
                   object_inputs, obj_idx_tensors,
                   intervention_traj,
@@ -197,8 +202,9 @@ def perform_adaptation(policy: Policy, batch_data: List[Tuple],
     for p in policy.adaptable_parameters:
         if p.requires_grad:
             adaptable_parameters.append(p)
-            if verbose:
-                write_log(log_file, f"Original p: {p}")
+    if verbose:
+        write_log(
+            log_file, f"Actual params: {params2str(adaptable_parameters)}")
 
     optimizer = Optimizer(adaptable_parameters, lr=lr)
     losses = []
@@ -230,13 +236,15 @@ def perform_adaptation(policy: Policy, batch_data: List[Tuple],
 
         if verbose:
             for old_p, new_p, grad in zip(old_params, adaptable_parameters, gradients):
+                # NOTE: +update, not -update since new_p - old_p already accounts for the -1* direction
                 update = new_p - old_p
-                write_log(log_file, "Original Grad: %.3f, Adam Grad: %.3f, New P: %.3f" % (
-                    -grad.item(), -update.item(), new_p.item()))
+                write_log(log_file, "Original Grad: %.3f, Pred Grad: %.3f, New P: %.3f" % (
+                    -grad.item(), +update.item() / lr, new_p.item()))
 
             write_log(log_file, "iter %d loss: %.3f" %
                       (iteration, loss.item()))
-            write_log(log_file, f"params: {adaptable_parameters}")
+            write_log(
+                log_file, f"Actual params: {params2str(adaptable_parameters)}")
 
     # Clip learned features within expected range
     if clip_params:
@@ -261,8 +269,9 @@ def perform_adaptation_rls(policy: Policy, rls: RLS, batch_data: List[Tuple],
     for p in policy.adaptable_parameters:
         if p.requires_grad:
             adaptable_parameters.append(p)
-            if verbose:
-                write_log(log_file, f"Original p: {p}")
+    if verbose:
+        write_log(
+            log_file, f"Actual params: {params2str(adaptable_parameters)}")
 
     losses = []
     pred_trajs = []
@@ -324,7 +333,8 @@ def perform_adaptation_rls(policy: Policy, rls: RLS, batch_data: List[Tuple],
         if verbose:
             write_log(log_file, "iter %d loss: %.3f" %
                       (iteration, loss.item()))
-            write_log(log_file, f"params: {adaptable_parameters}")
+            write_log(
+                log_file, f"Actual params: {params2str(adaptable_parameters)}")
 
     # Clip learned features within expected range
     if clip_params:
@@ -351,6 +361,8 @@ def perform_adaptation_learn2learn(policy: Policy, learned_opt, batch_data: List
 
     # Only adapt parameters that aren't frozen
     params = [p for p in policy.adaptable_parameters if p.requires_grad]
+    if verbose:
+        write_log(log_file, f"Actual params: {params2str(params)}")
     losses = []
     pred_trajs = []
     if n_adapt_iters == 0:
@@ -387,7 +399,7 @@ def perform_adaptation_learn2learn(policy: Policy, learned_opt, batch_data: List
         if verbose:
             write_log(log_file, "iter %d loss: %.3f" %
                       (iteration, loss.item()))
-            write_log(log_file, f"params: {params}")
+            write_log(log_file, f"Actual params: {params2str(params)}")
 
     # Clip learned features within expected range
     if clip_params:
@@ -456,7 +468,7 @@ def perform_adaptation_learn2learn_group(policy: Policy, learned_opts, batch_dat
         if verbose:
             write_log(log_file, "iter %d loss: %.3f" %
                       (iteration, loss.item()))
-            write_log(log_file, f"params: {params}")
+            write_log(log_file, f"Actual params: {params}")
 
     # Clip learned features within expected range
     if clip_params:
