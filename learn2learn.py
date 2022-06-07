@@ -169,7 +169,8 @@ class LearnedOptimizer(nn.Module):
                                        opt_lr=learn2learn_args['opt_lr'],
                                        hidden_dim=learn2learn_args['hidden_dim'],)
         learned_opt.load_state_dict(
-            torch.load(os.path.join(folder, f"learned_opt_{epoch}.h5")))
+            torch.load(os.path.join(folder, f"learned_opt_{epoch}.h5"),
+                       map_location=device))
         learned_opt.to(device)
         learned_opt.eval()
 
@@ -239,7 +240,7 @@ def train_helper(policy: Policy, learned_opt: LearnedOptimizer, batch_data, trai
     pos_requires_grad = [train_pos] * num_objects
 
     if train_rot:
-        if np.random.random() < 1.0:
+        if np.random.random() < 0.5:
             # Learn offsets
             rot_obj_types = [Params.IGNORE_ROT_IDX, Params.CARE_ROT_IDX]
             rot_requires_grad = [False] * num_objects

@@ -257,12 +257,15 @@ def perform_adaptation_rls(policy: Policy, rls: RLS, batch_data: List[Tuple],
                            train_pos: bool, train_rot: bool,
                            n_adapt_iters: int, dstep: float,
                            verbose=False, clip_params=True,
-                           ret_trajs=False, log_file=None):
+                           ret_trajs=False, log_file=None, reset_rls=True):
     """
     Recursive Least Squares Adaptation
     """
     batch_data_processed = process_batch_data(
         batch_data, train_rot=None, n_samples=None, is_full_traj=True)
+
+    if reset_rls:
+        rls.reset()
 
     # Only adapt parameters that aren't frozen
     adaptable_parameters = []
@@ -452,7 +455,7 @@ def perform_adaptation_learn2learn_group(policy: Policy, learned_opts, batch_dat
                                           dstep=dstep)
 
         new_params, need_reset = learned_opts.step(
-            loss, params, verbose=verbose, param_types=param_types)
+            loss, params, verbose=verbose, param_types=param_types, log_file=log_file)
 
         policy.update_obj_feats_with_grad(new_params, same_var=not need_reset)
         if need_reset:
@@ -465,9 +468,6 @@ def perform_adaptation_learn2learn_group(policy: Policy, learned_opts, batch_dat
         losses.append(loss.item())
         if ret_trajs:
             pred_trajs.append(pred_traj.detach().cpu().numpy())
-
-        import ipdb
-        ipdb.set_trace()
 
         if verbose:
             write_log(log_file, "iter %d loss: %.3f" %

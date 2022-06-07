@@ -19,6 +19,9 @@ class RLS(object):
         self.alpha = alpha  # learning rate
         self.H = None
 
+    def reset(self):
+        self.H = None
+
     def update(self, y, yhat, model, thetas: t.List[torch.Tensor], verbose=False, log_file=None):
         # should be equal to x b/c loss function is squared L2 norm / 2
         # NOTE: we take gradient wrt yhat, NOT Loss = squared error
