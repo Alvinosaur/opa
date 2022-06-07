@@ -558,12 +558,13 @@ if __name__ == '__main__':
             save_res_dir = f"eval_adaptation_results/learn2learn_group_rand_init"
             learned_opts = LearnedOptimizerGroup(
                 pos_opt_path=os.path.join(
-                    Params.model_root, "learned_opt_pos_pref_rand_init"),
+                    Params.model_root, "learned_opt_pos_pref_rand_init_15_unroll_3"),
                 rot_opt_path=os.path.join(
-                    Params.model_root, "learned_opt_rot_pref_easier"),
+                    Params.model_root, "learned_opt_rot_pref_rand_init_30_unroll_3"),
                 rot_offset_opt_path=os.path.join(
-                    Params.model_root, "learned_opt_rot_offset_easier"),
-                device=DEVICE)
+                    Params.model_root, "learned_opt_rot_offset_rand_init_30_unroll_3"),
+                device=DEVICE,
+                pos_epoch=4, rot_epoch=4, rot_offset_epoch=3)
             adaptation_func = lambda *args, **kwargs: perform_adaptation_learn2learn_group(
                 learned_opts=learned_opts, *args, **kwargs)
 

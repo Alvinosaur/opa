@@ -432,6 +432,7 @@ def perform_adaptation_learn2learn_group(policy: Policy, learned_opts, batch_dat
         if p.requires_grad:
             params.append(p)
             param_types.append(ptype)
+    write_log(log_file, f"Actual params: {params2str(params)}")
 
     losses = []
     pred_trajs = []
@@ -465,10 +466,13 @@ def perform_adaptation_learn2learn_group(policy: Policy, learned_opts, batch_dat
         if ret_trajs:
             pred_trajs.append(pred_traj.detach().cpu().numpy())
 
+        import ipdb
+        ipdb.set_trace()
+
         if verbose:
             write_log(log_file, "iter %d loss: %.3f" %
                       (iteration, loss.item()))
-            write_log(log_file, f"Actual params: {params}")
+            write_log(log_file, f"Actual params: {params2str(params)}")
 
     # Clip learned features within expected range
     if clip_params:

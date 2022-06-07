@@ -126,13 +126,15 @@ class LearnedOptimizer(nn.Module):
             new_p.retain_grad()
 
             new_params.append(new_p)
-            offset += p.numel()
 
             if verbose:
                 # NOTE: divide printed update by tgt_lr to get predicted gradient agnostic of the learning rate used)
-                orig_grad = gradients[offset:offset + p.numel()].view(p.shape)
+                orig_grad = gradients[offset:offset +
+                                      p.numel()].view(p.shape)
                 write_log(log_file, "Original Grad: %.3f, Pred Grad: %.3f, New P: %.3f" % (
                     -orig_grad.item(), -pred_grad.item() / self.tgt_lr, new_p.item()))
+
+            offset += p.numel()
 
         # prevent computation graph from being too large
         need_detach = False
@@ -175,11 +177,14 @@ class LearnedOptimizer(nn.Module):
 
 
 class LearnedOptimizerGroup(object):
-    def __init__(self, pos_opt_path, rot_opt_path, rot_offset_opt_path, device):
-        self.pos_opt = LearnedOptimizer.load_model(pos_opt_path, device=device)
-        self.rot_opt = LearnedOptimizer.load_model(rot_opt_path, device=device)
+    def __init__(self, pos_opt_path, rot_opt_path, rot_offset_opt_path, device,
+                 pos_epoch=3, rot_epoch=3, rot_offset_epoch=3):
+        self.pos_opt = LearnedOptimizer.load_model(
+            pos_opt_path, device=device, epoch=pos_epoch)
+        self.rot_opt = LearnedOptimizer.load_model(
+            rot_opt_path, device=device, epoch=rot_epoch)
         self.rot_offset_opt = LearnedOptimizer.load_model(
-            rot_offset_opt_path, device=device)
+            rot_offset_opt_path, device=device, epoch=rot_offset_epoch)
 
     def reset_lstm(self):
         self.pos_opt.reset_lstm()

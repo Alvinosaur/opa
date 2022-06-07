@@ -5,10 +5,10 @@ import matplotlib.pyplot as plt
 import re
 
 
-model = "RLS"
+model = "LSTM"
 
 if model == "LSTM":
-    model_name = "learn2learn_rand_init"
+    model_name = "learn2learn_group_rand_init"
     model_title = "Learn2Learn"
 elif model == "RLS":
     alpha = 0.5
@@ -27,16 +27,19 @@ num_steps = 32  # [0, ..., 31]
 # num_samples = 10  # only show first 10 samples for clarity
 
 # data_name = "pos"
-# data_name = "rot"
-data_name = "rot_ignore"
+data_name = "rot"
+# data_name = "rot_ignore"
 
 # data_type = "pos attract"
 # data_type = "pos repel"
 data_type = "rot pref"
 # data_type = "rot offset"
 
-folder = "/home/alvin/research/intelligent_control_lab/human_robot_interaction/opa/eval_adaptation_results/%s_%s" % (
-    model_name, data_name)
+# root_folder = "/home/alvin/research/intelligent_control_lab/human_robot_interaction/opa"
+root_folder = "/home/ashek/research/hri/opa"
+
+folder = "%s/eval_adaptation_results/%s_%s" % (
+    root_folder, model_name, data_name)
 fname = os.path.join(folder, "qualitative_output.txt")
 with open(fname, "r") as f:
     text = f.read()
@@ -88,6 +91,8 @@ else:
     else:
         orig_grad_pref = np.array(orig_grads[1::2])
         pred_grad_pref = np.array(pred_grads[1::2])
+
+# ipdb.set_trace()
 
 pattern = r"Target params: \[(.*)\]"
 target_param_strs = re.findall(pattern, text)
