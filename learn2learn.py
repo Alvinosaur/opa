@@ -245,7 +245,7 @@ class LearnedOptimizerGroup(object):
         return new_params, (need_detach_pos or need_detach_rot or need_detach_rot_offset)
 
 
-def train_helper(policy: Policy, learned_opt: LearnedOptimizer, batch_data, train_pos, train_rot, adapt_kwargs):
+def train_helper(policy: Policy, learned_opt: LearnedOptimizer, batch_data, train_pos, train_rot, use_rand_init, adapt_kwargs):
     (traj, goal_radius, obj_poses, obj_radii, obj_types) = batch_data[0]
     # num_objects = len(obj_types)  # fails when rot data can contain "care" or "ignore" objects, but only one object in a given scene
     num_objects = 2  # (Attract, Repel pos) or (Care, Ignore rot)
@@ -284,7 +284,7 @@ def train_helper(policy: Policy, learned_opt: LearnedOptimizer, batch_data, trai
                          rot_offsets=rot_offsets,
                          pos_requires_grad=pos_requires_grad, rot_requires_grad=rot_requires_grad,
                          rot_offset_requires_grad=rot_offset_requires_grad,
-                         use_rand_init=True)
+                         use_rand_init=use_rand_init)
     losses, _ = perform_adaptation_learn2learn(policy, learned_opt, batch_data,
                                                train_pos=train_pos, train_rot=train_rot,
                                                **adapt_kwargs)
@@ -378,7 +378,7 @@ def train(policy: Policy, learned_opt: LearnedOptimizer, train_args, saved_root:
                 pos_batch_data = load_batch(
                     train_pos_dataset, pos_batch_indices)
                 pos_losses = train_helper(
-                    policy, learned_opt, pos_batch_data, train_pos=True, train_rot=False, adapt_kwargs=adapt_kwargs)
+                    policy, learned_opt, pos_batch_data, train_pos=True, train_rot=False, adapt_kwargs=adapt_kwargs, use_rand_init=not train_args.use_fixed_init)
                 epoch_pos_losses += pos_losses
 
             # Rotation parameter adaptation
@@ -389,7 +389,7 @@ def train(policy: Policy, learned_opt: LearnedOptimizer, train_args, saved_root:
                 rot_batch_data = load_batch(
                     train_rot_dataset, rot_batch_indices)
                 rot_losses = train_helper(
-                    policy, learned_opt, rot_batch_data, train_pos=False, train_rot=True, adapt_kwargs=adapt_kwargs)
+                    policy, learned_opt, rot_batch_data, train_pos=False, train_rot=True, adapt_kwargs=adapt_kwargs, use_rand_init=not train_args.use_fixed_init)
                 epoch_rot_losses += rot_losses
 
             pbar.update(1)
@@ -434,6 +434,7 @@ def parse_arguments():
                         default=0, help="training epoch of pretrained model to load from")
     parser.add_argument('--train_rot', action='store_true')
     parser.add_argument('--train_pos', action='store_true')
+    parser.add_argument('--use_fixed_init', action='store_true')
 
     # Default hyperparameters used for paper experiments, no need to tune to reproduce
     parser.add_argument('--lr', action='store', type=float,
