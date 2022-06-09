@@ -9,7 +9,7 @@ import typing as t
 def write_log(log_file, string):
     print(string)
     if log_file is not None:
-        log_file.write(string+'\n')
+        log_file.write(string + '\n')
         log_file.flush()
 
 
@@ -76,7 +76,7 @@ class RLS(object):
             for i, theta in enumerate(thetas):
                 # NOTE: +dtheta because dtheta already points to minimize loss
                 write_log(log_file, "Original Grad: %.3f, Pred Grad: %.3f, New P: %.3f" % (
-                    -orig_grads[i].item(), +dthetas[i].item() / self.alpha, theta.item()))
+                    -orig_grads[i].item(), +dthetas[i].item(), theta.item()))
 
 
 def second_order_grad_example():
@@ -137,7 +137,7 @@ def rls_example_1D():
     plt.plot(xs, ys, label="Ground Truth", color="black", linewidth=2)
     plt.title("RLS(lambda=%.2f, alpha=%.2f)" % (lmbda, alpha))
     colors = cm.rainbow(np.linspace(0, 1, N))
-    for i in range(N-1):
+    for i in range(N - 1):
         x_vals = prediction_rollouts[i][0]
         yhats = prediction_rollouts[i][1]
         plt.plot(x_vals, yhats, label="step %d, theta=%.3f" %

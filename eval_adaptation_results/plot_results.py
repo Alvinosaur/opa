@@ -107,10 +107,10 @@ actual_params = np.vstack([np.fromstring(s, dtype=float, sep=", ")
 # look at a specific example
 matches = matches[:]
 
-vlines = np.arange(0, len(actual_params)+1, num_steps)
+vlines = np.arange(0, len(actual_params) + 1, num_steps)
 grad_i = 0
 for sample_i in range(target_params.shape[0]):
-    start_step, end_step = vlines[sample_i], vlines[sample_i+1]
+    start_step, end_step = vlines[sample_i], vlines[sample_i + 1]
     ts = np.arange(start_step, end_step)
 
     if data_name in ["rot", "rot_ignore"]:
@@ -154,18 +154,18 @@ for sample_i in range(target_params.shape[0]):
 
     if data_type != "rot offset":
         # no grad for last timestep/param
-        ax0.plot(ts[:-1], orig_grad_pref[grad_i:grad_i+num_steps-1],
+        ax0.plot(ts[:-1], orig_grad_pref[grad_i:grad_i + num_steps - 1],
                  label="-1 * Orig Grad Pref", color="tab:blue", linestyle="dashed")
-        ax0.plot(ts[:-1], pred_grad_pref[grad_i:grad_i+num_steps-1],
+        ax0.plot(ts[:-1], pred_grad_pref[grad_i:grad_i + num_steps - 1],
                  label="-1 * Pred Grad Pref", color="tab:blue")
     else:
-        ax0.plot(ts[:-1], orig_grad_offset[grad_i:grad_i+num_steps-1],
+        ax0.plot(ts[:-1], orig_grad_offset[grad_i:grad_i + num_steps - 1],
                  label="-1 * Orig Grad Rot Offset", color="tab:orange", linestyle="dashed")
-        ax0.plot(ts[:-1], pred_grad_offset[grad_i:grad_i+num_steps-1],
+        ax0.plot(ts[:-1], pred_grad_offset[grad_i:grad_i + num_steps - 1],
                  label="-1 * Pred Grad Rot Offset", color="tab:orange")
 
     ax1.plot(ts[:-1], iter_losses[grad_i:grad_i +
-             num_steps-1, 1], color="black")
+             num_steps - 1, 1], color="black")
 
     grad_i += num_steps - 1
 

@@ -83,8 +83,8 @@ class LearnedOptimizer(nn.Module):
             self.hidden_states1, (self.hidden_states2, self.cell_states2))
         out = self.output(self.hidden_states2)
 
-        # return out * inp
-        return out
+        return out, out * inp
+        # return out
 
     def reset_lstm(self):
         self.param_size = None  # Will automatically reset hidden states on the next call
@@ -118,7 +118,7 @@ class LearnedOptimizer(nn.Module):
         if self.param_dim == 1:
             # flatten and make each param dim a separate batch
             gradients = gradients.view(-1, 1)
-        pred_gradients = self.forward(gradients)
+        mults, pred_gradients = self.forward(gradients)
 
         # Apply learned update
         offset = 0
@@ -140,19 +140,17 @@ class LearnedOptimizer(nn.Module):
             new_params.append(new_p)
 
             if verbose:
-                # NOTE: divide printed update by tgt_lr to get predicted gradient agnostic of the learning rate used)
+                # NOTE: DO NOT divide by learning rate because we trained with this learning rate, so learned opt output will scale to whatever is optimal. Should compare with the optimal Adam and RLS learning rates
                 orig_grad = gradients[offset:offset +
                                       p.numel()].view(p.shape)
-                write_log(log_file, "Original Grad: %.3f, Pred Grad: %.3f, New P: %.3f" % (
-                    -orig_grad.item(), -pred_grad.item() / self.tgt_lr, new_p.item()))
+                write_log(log_file, "Original Grad: %.3f, Pred Grad: %.3f, mult: %.3f, New P: %.3f" % (
+                    -orig_grad.item(), -pred_grad.item(), mults[pi].item(), new_p.item()))
 
             offset += p.numel()
 
         # prevent computation graph from being too large
         need_detach = False
         if self.num_steps >= self.max_steps or is_final:
-            import ipdb
-            ipdb.set_trace()
             need_detach = True
             self.num_steps = 0
             if self.training:
@@ -370,6 +368,10 @@ def train(policy: Policy, learned_opt: LearnedOptimizer, train_args, saved_root:
             if opt_args.train_pos:
                 pos_batch_indices = train_pos_indices[b *
                                                       batch_size:(b + 1) * batch_size]
+
+                if (pbar.n) % 100 == 0:
+                    adapt_kwargs['verbose'] = True
+
                 pos_batch_data = load_batch(
                     train_pos_dataset, pos_batch_indices)
                 pos_losses = train_helper(
@@ -377,6 +379,7 @@ def train(policy: Policy, learned_opt: LearnedOptimizer, train_args, saved_root:
                 epoch_pos_losses += pos_losses
 
             # Rotation parameter adaptation
+            adapt_kwargs['verbose'] = False
             if opt_args.train_rot:
                 rot_batch_indices = train_rot_indices[b *
                                                       batch_size:(b + 1) * batch_size]

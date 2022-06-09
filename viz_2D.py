@@ -560,11 +560,11 @@ if __name__ == '__main__':
                 pos_opt_path=os.path.join(
                     Params.model_root, "learned_opt_pos_pref_rand_init_15_unroll_3"),
                 rot_opt_path=os.path.join(
-                    Params.model_root, "learned_opt_rot_pref_rand_init_30_unroll_3"),
+                    Params.model_root, "learned_opt_rot_pref_rand_init_30_unroll_2"),
                 rot_offset_opt_path=os.path.join(
-                    Params.model_root, "learned_opt_rot_offset_rand_init_30_unroll_3"),
+                    Params.model_root, "learned_opt_rot_offset_rand_init_30_unroll_2"),
                 device=DEVICE,
-                pos_epoch=4, rot_epoch=4, rot_offset_epoch=3)
+                pos_epoch=3, rot_epoch=4, rot_offset_epoch=3)
             adaptation_func = lambda *args, **kwargs: perform_adaptation_learn2learn_group(
                 learned_opts=learned_opts, *args, **kwargs)
 

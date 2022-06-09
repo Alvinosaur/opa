@@ -13,7 +13,7 @@ from train import process_batch_data, DEVICE
 def write_log(log_file, string):
     print(string)
     if log_file is not None:
-        log_file.write(string+'\n')
+        log_file.write(string + '\n')
         log_file.flush()
 
 
@@ -239,7 +239,7 @@ def perform_adaptation(policy: Policy, batch_data: List[Tuple],
                 # NOTE: +update, not -update since new_p - old_p already accounts for the -1* direction
                 update = new_p - old_p
                 write_log(log_file, "Original Grad: %.3f, Pred Grad: %.3f, New P: %.3f" % (
-                    -grad.item(), +update.item() / lr, new_p.item()))
+                    -grad.item(), +update.item(), new_p.item()))
 
             write_log(log_file, "iter %d loss: %.3f" %
                       (iteration, loss.item()))
