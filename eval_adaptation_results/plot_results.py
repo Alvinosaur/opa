@@ -5,7 +5,7 @@ import matplotlib.pyplot as plt
 import re
 
 
-model = "LSTM"
+model = "Adam"
 
 if model == "LSTM":
     model_name = "learn2learn_group_rand_init"
@@ -27,8 +27,8 @@ num_steps = 32  # [0, ..., 31]
 # num_samples = 10  # only show first 10 samples for clarity
 
 # data_name = "pos"
-data_name = "rot"
-# data_name = "rot_ignore"
+# data_name = "rot"
+data_name = "rot_ignore"
 
 # data_type = "pos attract"
 # data_type = "pos repel"
@@ -73,7 +73,7 @@ plt.clf()
 ###############################################################################
 fig, (ax0, ax1) = plt.subplots(nrows=2, ncols=1, figsize=(10, 5),
                                gridspec_kw={'height_ratios': [3, 1]})  # type: ignore
-pattern = r"\-Original Grad: ([-+]?\d+.\d+), \-lr \* Pred Grad: ([-+]?\d+.\d+), New P: ([-+]?\d+.\d+)"
+pattern = r"\-Original Grad: ([-+]?\d+.\d+), \-lr \* Pred Grad:\s+([-+]?\d+.\d+), New P: ([-+]?\d+.\d+)"
 matches = re.findall(pattern, text)
 orig_grads = [float(i) for i, _, _ in matches]
 pred_grads = [float(i) for _, i, _ in matches]
@@ -92,7 +92,7 @@ else:
         orig_grad_pref = np.array(orig_grads[1::2])
         pred_grad_pref = np.array(pred_grads[1::2])
 
-ipdb.set_trace()
+# ipdb.set_trace()
 
 pattern = r"Target params: \[(.*)\]"
 target_param_strs = re.findall(pattern, text)
