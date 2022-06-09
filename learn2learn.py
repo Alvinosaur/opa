@@ -83,8 +83,8 @@ class LearnedOptimizer(nn.Module):
             self.hidden_states1, (self.hidden_states2, self.cell_states2))
         out = self.output(self.hidden_states2)
 
-        return out, out * inp
-        # return out
+        # return out, out * inp
+        return out
 
     def reset_lstm(self):
         self.param_size = None  # Will automatically reset hidden states on the next call
@@ -118,7 +118,8 @@ class LearnedOptimizer(nn.Module):
         if self.param_dim == 1:
             # flatten and make each param dim a separate batch
             gradients = gradients.view(-1, 1)
-        mults, pred_gradients = self.forward(gradients)
+        # mults, pred_gradients = self.forward(gradients)
+        pred_gradients = self.forward(gradients)
 
         # Apply learned update
         offset = 0
@@ -143,8 +144,10 @@ class LearnedOptimizer(nn.Module):
                 # NOTE: DO NOT divide by learning rate because we trained with this learning rate, so learned opt output will scale to whatever is optimal. Should compare with the optimal Adam and RLS learning rates
                 orig_grad = gradients[offset:offset +
                                       p.numel()].view(p.shape)
-                write_log(log_file, "Original Grad: %.3f, Pred Grad: %.3f, mult: %.3f, New P: %.3f" % (
-                    -orig_grad.item(), -pred_grad.item(), mults[pi].item(), new_p.item()))
+                # write_log(log_file, "Original Grad: %.3f, lr * Pred Grad: %.3f, mult: %.3f, New P: %.3f" % (
+                #     -orig_grad.item(), -self.tgt_lr * -pred_grad.item(), mults[pi].item(), new_p.item()))
+                write_log(log_file, "-Original Grad: %.3f, -lr * Pred Grad: %.3f, New P: %.3f" % (
+                    -orig_grad.item(), -self.tgt_lr * pred_grad.item(), new_p.item()))
 
             offset += p.numel()
 

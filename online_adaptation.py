@@ -238,7 +238,7 @@ def perform_adaptation(policy: Policy, batch_data: List[Tuple],
             for old_p, new_p, grad in zip(old_params, adaptable_parameters, gradients):
                 # NOTE: +update, not -update since new_p - old_p already accounts for the -1* direction
                 update = new_p - old_p
-                write_log(log_file, "Original Grad: %.3f, Pred Grad: %.3f, New P: %.3f" % (
+                write_log(log_file, "-Original Grad: %.3f, -lr * Pred Grad:  %.3f, New P: %.3f" % (
                     -grad.item(), +update.item(), new_p.item()))
 
             write_log(log_file, "iter %d loss: %.3f" %
