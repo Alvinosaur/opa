@@ -38,7 +38,7 @@ class LearnedOptimizer(nn.Module):
     """
 
     def __init__(self, device, hidden_dim=20, param_dim=1,
-                 max_steps=5, opt_lr=1e-3, tgt_lr=1e-1, training=False):
+                 max_steps=5, opt_lr=1e-3, tgt_lr=1e-3, training=False):
         """
         :param n_params: number of parameters to optimize
         :param device: device to use
@@ -68,6 +68,7 @@ class LearnedOptimizer(nn.Module):
 
         # Optimization Info
         self.max_steps = max_steps
+        assert max_steps >= 1, "Must have at least 1 step. For 1 step, we would obtain the computation graph with 1st order gradient: P0 → loss0 → grad0, hidden0 → LSTM → P1 → loss1 (1st step, backprop + detach), → grad1(detached), hidden1(detached) → LSTM → P2..."
         self.loss_to_optimize = 0.0
         self.num_steps = 0.0
 
@@ -82,6 +83,7 @@ class LearnedOptimizer(nn.Module):
             self.hidden_states1, (self.hidden_states2, self.cell_states2))
         out = self.output(self.hidden_states2)
 
+        # return out * inp
         return out
 
     def reset_lstm(self):
@@ -92,8 +94,12 @@ class LearnedOptimizer(nn.Module):
             return [], False
 
         if self.param_size is None:
-            # Initialize hidden and cell states
-            self.param_size = sum(p.numel() for p in params)
+            if self.param_dim == 1:  # treat each param indep as separate batch
+                # Initialize hidden and cell states
+                self.param_size = sum(p.numel() for p in params)
+            else:
+                self.param_size = len(params)
+
             zero_init = Variable(torch.zeros(
                 self.param_size, self.hidden_dim, device=self.device))
             self.hidden_states1 = zero_init.clone()
@@ -103,21 +109,27 @@ class LearnedOptimizer(nn.Module):
 
         new_loss.backward(retain_graph=self.training or retain_graph_override)
         self.loss_to_optimize = self.loss_to_optimize + new_loss
-        self.num_steps += 1
 
         gradients = torch.stack([
             detach_var(p.grad).flatten() if p.grad is not None
             else torch.zeros(p.numel(), device=self.device)
             for p in params])
+
+        if self.param_dim == 1:
+            # flatten and make each param dim a separate batch
+            gradients = gradients.view(-1, 1)
         pred_gradients = self.forward(gradients)
 
         # Apply learned update
         offset = 0
         new_params = []
-        for p in params:
+        for pi, p in enumerate(params):
             if p.grad is not None:
-                pred_grad = pred_gradients[offset:offset +
-                                           p.numel()].view(p.shape)
+                if self.param_dim == 1:
+                    pred_grad = pred_gradients[offset:offset +
+                                               p.numel()].view(p.shape)
+                else:
+                    pred_grad = pred_gradients[pi]
                 new_p = p - self.tgt_lr * pred_grad
             else:
                 new_p = p
@@ -139,6 +151,8 @@ class LearnedOptimizer(nn.Module):
         # prevent computation graph from being too large
         need_detach = False
         if self.num_steps >= self.max_steps or is_final:
+            import ipdb
+            ipdb.set_trace()
             need_detach = True
             self.num_steps = 0
             if self.training:
@@ -157,6 +171,7 @@ class LearnedOptimizer(nn.Module):
             self.hidden_states2 = detach_var(self.hidden_states2)
             self.cell_states2 = detach_var(self.cell_states2)
 
+        self.num_steps += 1
         return new_params, need_detach
 
     @staticmethod
@@ -240,7 +255,8 @@ def train_helper(policy: Policy, learned_opt: LearnedOptimizer, batch_data, trai
     pos_requires_grad = [train_pos] * num_objects
 
     if train_rot:
-        if np.random.random() < 0.5:
+        p_thresh = 0.0
+        if np.random.random() < p_thresh:
             # Learn offsets
             rot_obj_types = [Params.IGNORE_ROT_IDX, Params.CARE_ROT_IDX]
             rot_requires_grad = [False] * num_objects
@@ -277,12 +293,12 @@ def train_helper(policy: Policy, learned_opt: LearnedOptimizer, batch_data, trai
 def plot_losses(fig, ax_pos, ax_rot, all_pos_losses, all_rot_losses, figname):
     ax_pos.set_title("Position Loss vs Adaptation Step")
     for i in range(len(all_pos_losses)):
-        ax_pos.plot(all_pos_losses[i], label="Epoch %d" % (i+1))
+        ax_pos.plot(all_pos_losses[i], label="Epoch %d" % (i + 1))
     ax_pos.legend()
 
     ax_rot.set_title("Rotation Loss vs Adaptation Step")
     for i in range(len(all_rot_losses)):
-        ax_rot.plot(all_rot_losses[i], label="Epoch %d" % (i+1))
+        ax_rot.plot(all_rot_losses[i], label="Epoch %d" % (i + 1))
     ax_rot.legend()
 
     ax_pos.set_xticks(np.arange(0, len(all_pos_losses[0])))
@@ -311,7 +327,7 @@ def train(policy: Policy, learned_opt: LearnedOptimizer, train_args, saved_root:
         root=f"data/rot_{str_3D}_train", buffer_size=buffer_size)
 
     batch_size = train_args.batch_size
-    num_epochs = 7
+    num_epochs = 5
     epochs_per_save = 1
 
     # Update over both pos and rot data one-by-one
@@ -319,6 +335,21 @@ def train(policy: Policy, learned_opt: LearnedOptimizer, train_args, saved_root:
     train_pos_indices = np.arange(min_len)
     train_rot_indices = np.arange(min_len)
     num_train_batches = min_len // batch_size
+
+    # Optionally save copy of all relevant scripts/files for reproducibility
+    os.mkdir(saved_root)
+    shutil.copy("model.py", os.path.join(saved_root, "model.py"))
+    shutil.copy("data_params.py", os.path.join(
+        saved_root, "data_params.py"))
+    shutil.copy("train.py", os.path.join(saved_root, "train.py"))
+    shutil.copy("learn2learn.py", os.path.join(
+        saved_root, "learn2learn.py"))
+    shutil.copy("online_adaptation.py", os.path.join(
+        saved_root, "online_adaptation.py"))
+
+    # Save train args
+    with open(os.path.join(saved_root, f"train_args.json"), "w") as outfile:
+        json.dump(vars(train_args), outfile, indent=4)
 
     fig, (ax_pos, ax_rot) = plt.subplots(1, 2, figsize=(10, 5))
     all_pos_losses = []
@@ -360,22 +391,6 @@ def train(policy: Policy, learned_opt: LearnedOptimizer, train_args, saved_root:
             if b % 10 == 0:
                 print(epoch_pos_losses / (b + 1))
                 print(epoch_rot_losses / (b + 1))
-
-            if b == 1 and epoch == 0:
-                # Optionally save copy of all relevant scripts/files for reproducibility
-                os.mkdir(saved_root)
-                shutil.copy("model.py", os.path.join(saved_root, "model.py"))
-                shutil.copy("data_params.py", os.path.join(
-                    saved_root, "data_params.py"))
-                shutil.copy("train.py", os.path.join(saved_root, "train.py"))
-                shutil.copy("learn2learn.py", os.path.join(
-                    saved_root, "learn2learn.py"))
-                shutil.copy("online_adaptation.py", os.path.join(
-                    saved_root, "online_adaptation.py"))
-
-                # Save train args
-                with open(os.path.join(saved_root, f"train_args.json"), "w") as outfile:
-                    json.dump(vars(train_args), outfile, indent=4)
 
         avg_epoch_pos_losses = epoch_pos_losses / num_train_batches
         avg_epoch_rot_losses = epoch_rot_losses / num_train_batches
@@ -426,10 +441,12 @@ def parse_arguments():
                         help="max number of consecutive gradient steps to take under same computation graph.")
     parser.add_argument('--max_unroll', action='store', type=int, default=None,
                         help="max number of steps to unroll computation graph. If not specified, defaults to each --max_steps")
-    parser.add_argument('--tgt_lr', action='store', type=float, default=1e-1,
+    parser.add_argument('--tgt_lr', action='store', type=float, default=1e-3,
                         help="learning rate for the optimization target(policy params)")
     parser.add_argument('--opt_lr', action='store', type=float, default=1e-3,
                         help="learning rate for the optimizer")
+    parser.add_argument('--param_dim', action='store', type=float, default=1,
+                        help="if multi-dim feature is the optimization target and param_dim specified as 1, this treats each dimension as a separate feature. This loses any structure in feature space, but could be important for optimizing features of different sizes and very large features by separating into mini-batches.")
     return parser.parse_args()
 
 
@@ -462,7 +479,7 @@ if __name__ == "__main__":
     if opt_args.max_unroll is None:
         opt_args.max_unroll = opt_args.max_steps
     learned_opt = LearnedOptimizer(
-        device=DEVICE, max_steps=opt_args.max_unroll, hidden_dim=opt_args.hidden_dim, tgt_lr=1e-3)  # param_dim=4
+        device=DEVICE, max_steps=opt_args.max_unroll, hidden_dim=opt_args.hidden_dim, tgt_lr=opt_args.tgt_lr, param_dim=opt_args.param_dim)
     learned_opt.to(DEVICE)
 
     n_adapt_iters = opt_args.max_steps
