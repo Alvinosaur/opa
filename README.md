@@ -20,6 +20,10 @@ cd opa/
 python -m pip install -r requirements.txt
 python -m pip install -r pybullet-planning/requirements.txt
 ```
+If you have an older version of cuda, you can install an older version of torch/torchvision:
+```
+python -m pip install torch==1.8.0+cu101 torchvision==0.9.0+cu101 -f https://download.pytorch.org/whl/cu101/torch_stable.html
+```
 
 #### 3D Visualization and Simulation
 To debug model behavior in 3D, we use ROS and Rviz. ROS (any version should work) can be installed by following these
