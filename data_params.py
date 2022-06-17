@@ -38,7 +38,8 @@ class Params:
     CARE_ROT_IDX = ATTRACT_IDX = 1
     object_alphas = np.array([-0.3, 0.3])  # (REPEL_IDX, ATTRACT_IDX)
     # (IGNORE_ROT_IDX, CARE_ROT_IDX, start, goal)
-    ori_offsets_2D = np.array([0, np.pi / 2, 0, 0])
+    # ori_offsets_2D = np.array([0, np.pi / 2, 0, 0])
+    ori_offsets_2D = np.array([0, -np.pi / 3, 0, 0])
     ori_offsets_3D = np.vstack([
         # (IGNORE_ROT_IDX)
         # This is arbitrary since rotation is ignored

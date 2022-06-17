@@ -546,7 +546,7 @@ if __name__ == '__main__':
     else:
         if args.use_rls:
             alpha = 0.5
-            lmbda = 0.4
+            lmbda = 0.9
             print(
                 f"Using RLS(alpha_{alpha}_lmbda_{lmbda}) to adapt object features.")
             save_res_dir = f"eval_adaptation_results/RLS(alpha_{alpha}_lmbda_{lmbda})"
@@ -558,7 +558,7 @@ if __name__ == '__main__':
             save_res_dir = f"eval_adaptation_results/learn2learn_group_rand_init"
             learned_opts = LearnedOptimizerGroup(
                 pos_opt_path=os.path.join(
-                    Params.model_root, "learned_opt_pos_pref_rand_init_15_unroll_3"),
+                    Params.model_root, "learned_opt_pos_20_unroll_3"),
                 rot_opt_path=os.path.join(
                     Params.model_root, "learned_opt_rot_pref_rand_init_30_unroll_2"),
                 rot_offset_opt_path=os.path.join(
@@ -583,13 +583,16 @@ if __name__ == '__main__':
             #     learned_opt=learned_opt, *args, **kwargs)
         elif args.use_sgd:
             print("Using SGD to adapt object features.")
+            optim_params = {'lr': 0.1, 'momentum': 0.9}
             adaptation_func = lambda *args, **kwargs: perform_adaptation(
-                Optimizer=torch.optim.SGD, *args, **kwargs)
-            save_res_dir = "eval_adaptation_results/SGD"
+                Optimizer=torch.optim.SGD, optim_params=optim_params, *args, **kwargs)
+            save_res_dir = "eval_adaptation_results/SGD(lr_%.1f_momentum_%.1f)" % (
+                optim_params['lr'], optim_params['momentum'])
         else:
             print("Using Adam to adapt object features.")
+            optim_params = {'lr': 0.1}
             adaptation_func = lambda *args, **kwargs: perform_adaptation(
-                Optimizer=torch.optim.Adam, *args, **kwargs)
+                Optimizer=torch.optim.Adam, optim_params=optim_params, *args, **kwargs)
             save_res_dir = "eval_adaptation_results/Adam"
 
         if save_res_dir is not None:

@@ -321,13 +321,13 @@ def batch_inner_loop(model: PolicyNetwork, batch_data: List[Tuple],
 
     # Start for model's rotational relation network
     start_rot_radii = torch.norm(
-        start_tensors[:, 0:pos_dim] - current_inputs[:, 0:pos_dim], dim=-1).unsqueeze(-1)
+        start_tensors[:, 0:pos_dim] - current_inputs[:, 0, 0:pos_dim], dim=-1).unsqueeze(-1)
     start_rot_inputs = torch.cat(
         [start_tensors, start_rot_radii], dim=-1).unsqueeze(1)
 
     # Goal Pos
     goal_radii = torch.norm(
-        goal_tensors[:, 0:pos_dim] - current_inputs[:, 0:pos_dim], dim=-1).unsqueeze(-1)
+        goal_tensors[:, 0:pos_dim] - current_inputs[:, 0, 0:pos_dim], dim=-1).unsqueeze(-1)
     goal_inputs = torch.cat([goal_tensors, goal_radii], dim=-1).unsqueeze(1)
 
     output_vec, output_ori, pos_effects = model(current=current_inputs,
@@ -611,10 +611,15 @@ if __name__ == "__main__":
     model.pos_pref_feat_train[Params.ATTRACT_IDX].data.fill_(0.3)
     model.pos_pref_feat_train[Params.GOAL_IDX].data.fill_(0.0)
 
-    model.rot_pref_feat_train[Params.IGNORE_ROT_IDX].data.fill_(-1.0)
-    model.rot_pref_feat_train[Params.CARE_ROT_IDX].data.fill_(1.0)
-    model.rot_pref_feat_train[Params.START_IDX].data.fill_(1.0)
-    model.rot_pref_feat_train[Params.GOAL_IDX].data.fill_(1.0)
+    # model.rot_pref_feat_train[Params.IGNORE_ROT_IDX].data.fill_(-1.0)
+    # model.rot_pref_feat_train[Params.CARE_ROT_IDX].data.fill_(1.0)
+    # model.rot_pref_feat_train[Params.START_IDX].data.fill_(1.0)
+    # model.rot_pref_feat_train[Params.GOAL_IDX].data.fill_(1.0)
+
+    model.rot_pref_feat_train[Params.IGNORE_ROT_IDX].data.fill_(5.0)
+    model.rot_pref_feat_train[Params.CARE_ROT_IDX].data.fill_(-5.0)
+    model.rot_pref_feat_train[Params.START_IDX].data.fill_(-10.0)
+    model.rot_pref_feat_train[Params.GOAL_IDX].data.fill_(3.0)
 
     # Load pretrained model
     # NOTE: This is necessary when training position and rotation networks

@@ -371,10 +371,6 @@ def train(policy: Policy, learned_opt: LearnedOptimizer, train_args, saved_root:
             if opt_args.train_pos:
                 pos_batch_indices = train_pos_indices[b *
                                                       batch_size:(b + 1) * batch_size]
-
-                if (pbar.n) % 100 == 0:
-                    adapt_kwargs['verbose'] = True
-
                 pos_batch_data = load_batch(
                     train_pos_dataset, pos_batch_indices)
                 pos_losses = train_helper(
@@ -382,7 +378,6 @@ def train(policy: Policy, learned_opt: LearnedOptimizer, train_args, saved_root:
                 epoch_pos_losses += pos_losses
 
             # Rotation parameter adaptation
-            adapt_kwargs['verbose'] = False
             if opt_args.train_rot:
                 rot_batch_indices = train_rot_indices[b *
                                                       batch_size:(b + 1) * batch_size]

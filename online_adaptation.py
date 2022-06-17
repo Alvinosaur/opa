@@ -178,8 +178,9 @@ def perform_adaptation(policy: Policy, batch_data: List[Tuple],
                        n_adapt_iters: int, dstep: float,
                        verbose=False, clip_params=True,
                        ret_trajs=False,
-                       Optimizer=torch.optim.Adam, lr=1e-1,
-                       log_file=None):
+                       Optimizer=torch.optim.Adam,
+                       log_file=None,
+                       optim_params={'lr': 0.1}):
     """
     Adapts the policy to the batch of human intervention data.
     :param policy: Policy to adapt
@@ -206,7 +207,7 @@ def perform_adaptation(policy: Policy, batch_data: List[Tuple],
         write_log(
             log_file, f"Actual params: {params2str(adaptable_parameters)}")
 
-    optimizer = Optimizer(adaptable_parameters, lr=lr)
+    optimizer = Optimizer(adaptable_parameters, **optim_params)
     losses = []
     pred_trajs = []
     if n_adapt_iters == 0:
