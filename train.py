@@ -312,7 +312,7 @@ def batch_inner_loop(model: PolicyNetwork, batch_data: List[Tuple],
     :param n_samples: Number of samples to take from each trajectory
     :return:
     """
-
+    pos_dim = 3 if is_3D else 2
     (start_tensors, current_inputs,
      goal_tensors, goal_rot_inputs,
      object_inputs, obj_type_tensors,
