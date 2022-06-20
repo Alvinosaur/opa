@@ -1,0 +1,1260 @@
+Target params: [-1.0746]
+Actual params: [1.084 , 0.5507]
+-Original Grad: 0.177, -lr * Pred Grad:  0.059, New P: 1.143
+-Original Grad: 0.445, -lr * Pred Grad:  0.242, New P: 0.792
+iter 0 loss: 0.911
+Actual params: [1.1429, 0.7924]
+-Original Grad: 0.336, -lr * Pred Grad:  0.349, New P: 1.492
+-Original Grad: 0.403, -lr * Pred Grad:  -0.014, New P: 0.779
+iter 1 loss: 0.862
+Actual params: [1.4917, 0.7788]
+-Original Grad: 0.172, -lr * Pred Grad:  -0.210, New P: 1.281
+-Original Grad: 0.614, -lr * Pred Grad:  0.249, New P: 1.028
+iter 2 loss: 0.814
+Actual params: [1.2813, 1.028 ]
+-Original Grad: 0.438, -lr * Pred Grad:  0.310, New P: 1.591
+-Original Grad: 0.364, -lr * Pred Grad:  -0.066, New P: 0.962
+iter 3 loss: 0.792
+Actual params: [1.5913, 0.9618]
+-Original Grad: 0.239, -lr * Pred Grad:  -0.009, New P: 1.582
+-Original Grad: 0.508, -lr * Pred Grad:  0.113, New P: 1.075
+iter 4 loss: 0.735
+Actual params: [1.5823, 1.0747]
+-Original Grad: 0.266, -lr * Pred Grad:  0.057, New P: 1.640
+-Original Grad: 0.441, -lr * Pred Grad:  0.059, New P: 1.134
+iter 5 loss: 0.709
+Actual params: [1.6398, 1.1341]
+-Original Grad: 0.302, -lr * Pred Grad:  0.081, New P: 1.721
+-Original Grad: 0.458, -lr * Pred Grad:  0.043, New P: 1.177
+iter 6 loss: 0.676
+Actual params: [1.7213, 1.1766]
+-Original Grad: 0.343, -lr * Pred Grad:  0.129, New P: 1.851
+-Original Grad: 0.430, -lr * Pred Grad:  0.004, New P: 1.180
+iter 7 loss: 0.638
+Actual params: [1.8505, 1.1804]
+-Original Grad: 0.302, -lr * Pred Grad:  0.060, New P: 1.911
+-Original Grad: 0.446, -lr * Pred Grad:  0.040, New P: 1.220
+iter 8 loss: 0.596
+Actual params: [1.9108, 1.2202]
+-Original Grad: 0.279, -lr * Pred Grad:  0.039, New P: 1.950
+-Original Grad: 0.430, -lr * Pred Grad:  0.045, New P: 1.265
+iter 9 loss: 0.569
+Actual params: [1.9502, 1.2654]
+-Original Grad: 0.231, -lr * Pred Grad:  0.018, New P: 1.968
+-Original Grad: 0.373, -lr * Pred Grad:  0.048, New P: 1.313
+iter 10 loss: 0.548
+Actual params: [1.9681, 1.3131]
+-Original Grad: 0.255, -lr * Pred Grad:  0.104, New P: 2.072
+-Original Grad: 0.308, -lr * Pred Grad:  -0.014, New P: 1.299
+iter 11 loss: 0.532
+Actual params: [2.0717, 1.2991]
+-Original Grad: 0.212, -lr * Pred Grad:  0.013, New P: 2.085
+-Original Grad: 0.333, -lr * Pred Grad:  0.045, New P: 1.344
+iter 12 loss: 0.517
+Actual params: [2.0849, 1.344 ]
+-Original Grad: 0.181, -lr * Pred Grad:  -0.010, New P: 2.075
+-Original Grad: 0.304, -lr * Pred Grad:  0.055, New P: 1.399
+iter 13 loss: 0.503
+Actual params: [2.0751, 1.3989]
+-Original Grad: 0.162, -lr * Pred Grad:  -0.002, New P: 2.074
+-Original Grad: 0.267, -lr * Pred Grad:  0.045, New P: 1.444
+iter 14 loss: 0.490
+Actual params: [2.0735, 1.4438]
+-Original Grad: 0.187, -lr * Pred Grad:  0.096, New P: 2.170
+-Original Grad: 0.228, -lr * Pred Grad:  -0.021, New P: 1.423
+iter 15 loss: 0.480
+Actual params: [2.1696, 1.4232]
+-Original Grad: 0.144, -lr * Pred Grad:  -0.027, New P: 2.142
+-Original Grad: 0.251, -lr * Pred Grad:  0.061, New P: 1.484
+iter 16 loss: 0.471
+Actual params: [2.1425, 1.4843]
+-Original Grad: 0.151, -lr * Pred Grad:  0.026, New P: 2.168
+-Original Grad: 0.226, -lr * Pred Grad:  0.025, New P: 1.509
+iter 17 loss: 0.459
+Actual params: [2.1684, 1.5094]
+-Original Grad: 0.140, -lr * Pred Grad:  0.016, New P: 2.184
+-Original Grad: 0.215, -lr * Pred Grad:  0.031, New P: 1.540
+iter 18 loss: 0.449
+Actual params: [2.184 , 1.5404]
+-Original Grad: 0.139, -lr * Pred Grad:  0.032, New P: 2.216
+-Original Grad: 0.203, -lr * Pred Grad:  0.020, New P: 1.560
+iter 19 loss: 0.439
+Actual params: [2.2159, 1.5603]
+-Original Grad: 0.113, -lr * Pred Grad:  -0.029, New P: 2.187
+-Original Grad: 0.196, -lr * Pred Grad:  0.058, New P: 1.618
+iter 20 loss: 0.430
+Actual params: [2.1866, 1.6185]
+-Original Grad: 0.139, -lr * Pred Grad:  0.071, New P: 2.257
+-Original Grad: 0.185, -lr * Pred Grad:  -0.006, New P: 1.613
+iter 21 loss: 0.421
+Actual params: [2.2573, 1.6129]
+-Original Grad: 0.076, -lr * Pred Grad:  -0.125, New P: 2.133
+-Original Grad: 0.181, -lr * Pred Grad:  0.117, New P: 1.730
+iter 22 loss: 0.413
+Actual params: [2.1325, 1.7298]
+-Original Grad: 0.118, -lr * Pred Grad:  0.020, New P: 2.153
+-Original Grad: 0.182, -lr * Pred Grad:  0.029, New P: 1.758
+iter 23 loss: 0.402
+Actual params: [2.1528, 1.7583]
+-Original Grad: 0.113, -lr * Pred Grad:  0.016, New P: 2.168
+-Original Grad: 0.175, -lr * Pred Grad:  0.031, New P: 1.789
+iter 24 loss: 0.392
+Actual params: [2.1684, 1.7894]
+-Original Grad: 0.104, -lr * Pred Grad:  -0.001, New P: 2.168
+-Original Grad: 0.167, -lr * Pred Grad:  0.040, New P: 1.830
+iter 25 loss: 0.382
+Actual params: [2.1676, 1.8299]
+-Original Grad: 0.091, -lr * Pred Grad:  -0.042, New P: 2.126
+-Original Grad: 0.161, -lr * Pred Grad:  0.066, New P: 1.896
+iter 26 loss: 0.372
+Actual params: [2.1258, 1.8956]
+-Original Grad: 0.089, -lr * Pred Grad:  -0.045, New P: 2.081
+-Original Grad: 0.158, -lr * Pred Grad:  0.068, New P: 1.963
+iter 27 loss: 0.360
+Actual params: [2.081 , 1.9632]
+-Original Grad: 0.084, -lr * Pred Grad:  -0.057, New P: 2.024
+-Original Grad: 0.154, -lr * Pred Grad:  0.074, New P: 2.037
+iter 28 loss: 0.348
+Actual params: [2.0245, 2.0373]
+-Original Grad: 0.079, -lr * Pred Grad:  -0.072, New P: 1.953
+-Original Grad: 0.150, -lr * Pred Grad:  0.083, New P: 2.120
+iter 29 loss: 0.334
+Actual params: [1.9528, 2.1199]
+-Original Grad: 0.069, -lr * Pred Grad:  -0.094, New P: 1.859
+-Original Grad: 0.142, -lr * Pred Grad:  0.093, New P: 2.213
+iter 30 loss: 0.321
+Actual params: [1.8592, 2.2133]
+Target params: [-1.0746]
+Actual params: [-1.0585,  1.4018]
+-Original Grad: 0.000, -lr * Pred Grad:  0.000, New P: -1.058
+-Original Grad: -0.000, -lr * Pred Grad:  -0.000, New P: 1.402
+iter 0 loss: 0.105
+Actual params: [-1.0584,  1.4018]
+-Original Grad: 0.000, -lr * Pred Grad:  0.000, New P: -1.058
+-Original Grad: -0.000, -lr * Pred Grad:  -0.000, New P: 1.402
+iter 1 loss: 0.105
+Actual params: [-1.0582,  1.4018]
+-Original Grad: 0.000, -lr * Pred Grad:  0.000, New P: -1.058
+-Original Grad: -0.000, -lr * Pred Grad:  -0.000, New P: 1.402
+iter 2 loss: 0.105
+Actual params: [-1.0581,  1.4017]
+-Original Grad: 0.000, -lr * Pred Grad:  0.000, New P: -1.058
+-Original Grad: -0.000, -lr * Pred Grad:  -0.000, New P: 1.402
+iter 3 loss: 0.105
+Actual params: [-1.0579,  1.4017]
+-Original Grad: 0.000, -lr * Pred Grad:  0.000, New P: -1.058
+-Original Grad: -0.000, -lr * Pred Grad:  -0.000, New P: 1.402
+iter 4 loss: 0.105
+Actual params: [-1.0578,  1.4017]
+-Original Grad: 0.000, -lr * Pred Grad:  0.000, New P: -1.058
+-Original Grad: -0.000, -lr * Pred Grad:  -0.000, New P: 1.402
+iter 5 loss: 0.105
+Actual params: [-1.0576,  1.4016]
+-Original Grad: 0.000, -lr * Pred Grad:  0.000, New P: -1.057
+-Original Grad: -0.000, -lr * Pred Grad:  -0.000, New P: 1.402
+iter 6 loss: 0.105
+Actual params: [-1.0574,  1.4016]
+-Original Grad: 0.000, -lr * Pred Grad:  0.000, New P: -1.057
+-Original Grad: -0.000, -lr * Pred Grad:  -0.000, New P: 1.402
+iter 7 loss: 0.105
+Actual params: [-1.0571,  1.4015]
+-Original Grad: 0.000, -lr * Pred Grad:  0.000, New P: -1.057
+-Original Grad: -0.000, -lr * Pred Grad:  -0.000, New P: 1.401
+iter 8 loss: 0.105
+Actual params: [-1.0568,  1.4014]
+-Original Grad: 0.000, -lr * Pred Grad:  0.000, New P: -1.057
+-Original Grad: -0.000, -lr * Pred Grad:  -0.000, New P: 1.401
+iter 9 loss: 0.105
+Actual params: [-1.0565,  1.4014]
+-Original Grad: 0.000, -lr * Pred Grad:  0.000, New P: -1.056
+-Original Grad: -0.000, -lr * Pred Grad:  -0.000, New P: 1.401
+iter 10 loss: 0.105
+Actual params: [-1.0562,  1.4013]
+-Original Grad: 0.000, -lr * Pred Grad:  0.000, New P: -1.056
+-Original Grad: -0.000, -lr * Pred Grad:  -0.000, New P: 1.401
+iter 11 loss: 0.105
+Actual params: [-1.0558,  1.4012]
+-Original Grad: 0.000, -lr * Pred Grad:  0.000, New P: -1.055
+-Original Grad: -0.000, -lr * Pred Grad:  -0.000, New P: 1.401
+iter 12 loss: 0.105
+Actual params: [-1.0554,  1.4011]
+-Original Grad: 0.000, -lr * Pred Grad:  0.000, New P: -1.055
+-Original Grad: -0.000, -lr * Pred Grad:  -0.000, New P: 1.401
+iter 13 loss: 0.105
+Actual params: [-1.055,  1.401]
+-Original Grad: 0.000, -lr * Pred Grad:  0.001, New P: -1.054
+-Original Grad: -0.000, -lr * Pred Grad:  -0.000, New P: 1.401
+iter 14 loss: 0.105
+Actual params: [-1.0544,  1.4009]
+-Original Grad: 0.000, -lr * Pred Grad:  0.001, New P: -1.054
+-Original Grad: -0.000, -lr * Pred Grad:  -0.000, New P: 1.401
+iter 15 loss: 0.105
+Actual params: [-1.0539,  1.4008]
+-Original Grad: 0.000, -lr * Pred Grad:  0.001, New P: -1.053
+-Original Grad: -0.000, -lr * Pred Grad:  -0.000, New P: 1.401
+iter 16 loss: 0.105
+Actual params: [-1.0532,  1.4006]
+-Original Grad: 0.000, -lr * Pred Grad:  0.001, New P: -1.053
+-Original Grad: -0.000, -lr * Pred Grad:  -0.000, New P: 1.400
+iter 17 loss: 0.105
+Actual params: [-1.0525,  1.4004]
+-Original Grad: 0.000, -lr * Pred Grad:  0.001, New P: -1.052
+-Original Grad: -0.000, -lr * Pred Grad:  -0.000, New P: 1.400
+iter 18 loss: 0.105
+Actual params: [-1.0517,  1.4003]
+-Original Grad: 0.000, -lr * Pred Grad:  0.001, New P: -1.051
+-Original Grad: -0.000, -lr * Pred Grad:  -0.000, New P: 1.400
+iter 19 loss: 0.105
+Actual params: [-1.0508,  1.4001]
+-Original Grad: 0.000, -lr * Pred Grad:  0.001, New P: -1.050
+-Original Grad: -0.000, -lr * Pred Grad:  -0.000, New P: 1.400
+iter 20 loss: 0.105
+Actual params: [-1.0498,  1.3998]
+-Original Grad: 0.000, -lr * Pred Grad:  0.001, New P: -1.049
+-Original Grad: -0.000, -lr * Pred Grad:  -0.000, New P: 1.400
+iter 21 loss: 0.105
+Actual params: [-1.0487,  1.3996]
+-Original Grad: 0.000, -lr * Pred Grad:  0.001, New P: -1.047
+-Original Grad: -0.000, -lr * Pred Grad:  -0.000, New P: 1.399
+iter 22 loss: 0.105
+Actual params: [-1.0474,  1.3993]
+-Original Grad: 0.000, -lr * Pred Grad:  0.001, New P: -1.046
+-Original Grad: -0.000, -lr * Pred Grad:  -0.000, New P: 1.399
+iter 23 loss: 0.105
+Actual params: [-1.046 ,  1.3989]
+-Original Grad: 0.000, -lr * Pred Grad:  0.002, New P: -1.044
+-Original Grad: -0.000, -lr * Pred Grad:  -0.000, New P: 1.399
+iter 24 loss: 0.105
+Actual params: [-1.0444,  1.3986]
+-Original Grad: 0.000, -lr * Pred Grad:  0.002, New P: -1.043
+-Original Grad: -0.000, -lr * Pred Grad:  -0.000, New P: 1.398
+iter 25 loss: 0.105
+Actual params: [-1.0427,  1.3982]
+-Original Grad: 0.000, -lr * Pred Grad:  0.002, New P: -1.041
+-Original Grad: -0.000, -lr * Pred Grad:  -0.000, New P: 1.398
+iter 26 loss: 0.105
+Actual params: [-1.0407,  1.3977]
+-Original Grad: 0.000, -lr * Pred Grad:  0.002, New P: -1.038
+-Original Grad: -0.000, -lr * Pred Grad:  -0.001, New P: 1.397
+iter 27 loss: 0.105
+Actual params: [-1.0384,  1.3972]
+-Original Grad: 0.000, -lr * Pred Grad:  0.003, New P: -1.036
+-Original Grad: -0.000, -lr * Pred Grad:  -0.001, New P: 1.397
+iter 28 loss: 0.105
+Actual params: [-1.0359,  1.3966]
+-Original Grad: 0.000, -lr * Pred Grad:  0.003, New P: -1.033
+-Original Grad: -0.000, -lr * Pred Grad:  -0.001, New P: 1.396
+iter 29 loss: 0.105
+Actual params: [-1.033 ,  1.3959]
+-Original Grad: 0.000, -lr * Pred Grad:  0.003, New P: -1.030
+-Original Grad: -0.000, -lr * Pred Grad:  -0.001, New P: 1.395
+iter 30 loss: 0.105
+Actual params: [-1.0297,  1.3952]
+Target params: [-1.0746]
+Actual params: [1.5477, 0.5327]
+-Original Grad: 0.200, -lr * Pred Grad:  0.160, New P: 1.707
+-Original Grad: -0.450, -lr * Pred Grad:  -0.393, New P: 0.139
+iter 0 loss: 0.537
+Actual params: [1.7073, 0.1393]
+-Original Grad: 0.077, -lr * Pred Grad:  -0.258, New P: 1.449
+-Original Grad: -0.303, -lr * Pred Grad:  -0.291, New P: -0.151
+iter 1 loss: 0.384
+Actual params: [ 1.4493, -0.1514]
+-Original Grad: 0.059, -lr * Pred Grad:  -0.171, New P: 1.278
+-Original Grad: -0.249, -lr * Pred Grad:  -0.180, New P: -0.331
+iter 2 loss: 0.287
+Actual params: [ 1.2784, -0.3313]
+-Original Grad: 0.060, -lr * Pred Grad:  -0.068, New P: 1.210
+-Original Grad: -0.225, -lr * Pred Grad:  -0.113, New P: -0.444
+iter 3 loss: 0.228
+Actual params: [ 1.21  , -0.4444]
+-Original Grad: 0.035, -lr * Pred Grad:  -0.206, New P: 1.004
+-Original Grad: -0.212, -lr * Pred Grad:  -0.126, New P: -0.570
+iter 4 loss: 0.196
+Actual params: [ 1.0043, -0.5703]
+-Original Grad: 0.012, -lr * Pred Grad:  -0.236, New P: 0.768
+-Original Grad: -0.189, -lr * Pred Grad:  -0.103, New P: -0.673
+iter 5 loss: 0.163
+Actual params: [ 0.7682, -0.6735]
+-Original Grad: -0.015, -lr * Pred Grad:  -0.193, New P: 0.575
+-Original Grad: -0.124, -lr * Pred Grad:  -0.064, New P: -0.737
+iter 6 loss: 0.124
+Actual params: [ 0.5753, -0.737 ]
+-Original Grad: 0.003, -lr * Pred Grad:  -0.033, New P: 0.542
+-Original Grad: -0.071, -lr * Pred Grad:  -0.021, New P: -0.758
+iter 7 loss: 0.095
+Actual params: [ 0.5423, -0.7584]
+-Original Grad: 0.004, -lr * Pred Grad:  -0.009, New P: 0.533
+-Original Grad: -0.053, -lr * Pred Grad:  -0.013, New P: -0.772
+iter 8 loss: 0.089
+Actual params: [ 0.5331, -0.7719]
+-Original Grad: 0.004, -lr * Pred Grad:  -0.002, New P: 0.531
+-Original Grad: -0.050, -lr * Pred Grad:  -0.012, New P: -0.784
+iter 9 loss: 0.086
+Actual params: [ 0.5307, -0.7836]
+-Original Grad: 0.004, -lr * Pred Grad:  0.004, New P: 0.535
+-Original Grad: -0.046, -lr * Pred Grad:  -0.010, New P: -0.794
+iter 10 loss: 0.084
+Actual params: [ 0.5349, -0.7939]
+-Original Grad: 0.002, -lr * Pred Grad:  -0.001, New P: 0.534
+-Original Grad: -0.031, -lr * Pred Grad:  -0.007, New P: -0.801
+iter 11 loss: 0.082
+Actual params: [ 0.5341, -0.801 ]
+-Original Grad: 0.002, -lr * Pred Grad:  0.000, New P: 0.535
+-Original Grad: -0.029, -lr * Pred Grad:  -0.007, New P: -0.808
+iter 12 loss: 0.081
+Actual params: [ 0.5346, -0.8078]
+-Original Grad: -0.000, -lr * Pred Grad:  -0.003, New P: 0.531
+-Original Grad: -0.014, -lr * Pred Grad:  -0.004, New P: -0.811
+iter 13 loss: 0.080
+Actual params: [ 0.5314, -0.8114]
+-Original Grad: -0.000, -lr * Pred Grad:  -0.003, New P: 0.528
+-Original Grad: -0.014, -lr * Pred Grad:  -0.004, New P: -0.815
+iter 14 loss: 0.080
+Actual params: [ 0.5283, -0.8149]
+-Original Grad: 0.004, -lr * Pred Grad:  0.010, New P: 0.538
+-Original Grad: -0.005, -lr * Pred Grad:  -0.001, New P: -0.816
+iter 15 loss: 0.079
+Actual params: [ 0.5379, -0.8155]
+-Original Grad: -0.000, -lr * Pred Grad:  -0.003, New P: 0.535
+-Original Grad: -0.013, -lr * Pred Grad:  -0.004, New P: -0.819
+iter 16 loss: 0.080
+Actual params: [ 0.535, -0.819]
+-Original Grad: 0.003, -lr * Pred Grad:  0.008, New P: 0.543
+-Original Grad: -0.004, -lr * Pred Grad:  -0.001, New P: -0.820
+iter 17 loss: 0.079
+Actual params: [ 0.5434, -0.8196]
+-Original Grad: -0.000, -lr * Pred Grad:  -0.003, New P: 0.540
+-Original Grad: -0.012, -lr * Pred Grad:  -0.003, New P: -0.823
+iter 18 loss: 0.079
+Actual params: [ 0.5404, -0.8231]
+-Original Grad: 0.003, -lr * Pred Grad:  0.007, New P: 0.548
+-Original Grad: -0.003, -lr * Pred Grad:  -0.000, New P: -0.824
+iter 19 loss: 0.079
+Actual params: [ 0.5478, -0.8236]
+-Original Grad: 0.004, -lr * Pred Grad:  0.009, New P: 0.557
+-Original Grad: -0.003, -lr * Pred Grad:  -0.000, New P: -0.824
+iter 20 loss: 0.079
+Actual params: [ 0.5565, -0.824 ]
+-Original Grad: -0.007, -lr * Pred Grad:  -0.013, New P: 0.543
+-Original Grad: -0.001, -lr * Pred Grad:  -0.001, New P: -0.825
+iter 21 loss: 0.079
+Actual params: [ 0.5431, -0.8252]
+-Original Grad: 0.004, -lr * Pred Grad:  0.006, New P: 0.549
+-Original Grad: -0.003, -lr * Pred Grad:  -0.000, New P: -0.826
+iter 22 loss: 0.078
+Actual params: [ 0.5494, -0.8257]
+-Original Grad: -0.001, -lr * Pred Grad:  -0.001, New P: 0.548
+-Original Grad: 0.008, -lr * Pred Grad:  0.002, New P: -0.823
+iter 23 loss: 0.079
+Actual params: [ 0.5483, -0.8232]
+-Original Grad: 0.000, -lr * Pred Grad:  -0.002, New P: 0.547
+-Original Grad: -0.012, -lr * Pred Grad:  -0.004, New P: -0.827
+iter 24 loss: 0.079
+Actual params: [ 0.5465, -0.8272]
+-Original Grad: -0.001, -lr * Pred Grad:  -0.001, New P: 0.546
+-Original Grad: 0.008, -lr * Pred Grad:  0.003, New P: -0.825
+iter 25 loss: 0.078
+Actual params: [ 0.5456, -0.8246]
+-Original Grad: 0.004, -lr * Pred Grad:  0.006, New P: 0.552
+-Original Grad: -0.003, -lr * Pred Grad:  -0.001, New P: -0.825
+iter 26 loss: 0.079
+Actual params: [ 0.5516, -0.8252]
+-Original Grad: -0.005, -lr * Pred Grad:  -0.008, New P: 0.543
+-Original Grad: -0.000, -lr * Pred Grad:  -0.001, New P: -0.826
+iter 27 loss: 0.079
+Actual params: [ 0.5433, -0.8262]
+-Original Grad: 0.003, -lr * Pred Grad:  0.005, New P: 0.548
+-Original Grad: -0.003, -lr * Pred Grad:  -0.001, New P: -0.827
+iter 28 loss: 0.078
+Actual params: [ 0.5483, -0.8267]
+-Original Grad: -0.001, -lr * Pred Grad:  -0.001, New P: 0.548
+-Original Grad: 0.008, -lr * Pred Grad:  0.003, New P: -0.824
+iter 29 loss: 0.078
+Actual params: [ 0.5477, -0.8238]
+-Original Grad: 0.004, -lr * Pred Grad:  0.005, New P: 0.553
+-Original Grad: -0.003, -lr * Pred Grad:  -0.001, New P: -0.824
+iter 30 loss: 0.079
+Actual params: [ 0.553 , -0.8244]
+Target params: [-1.0746]
+Actual params: [0.0029, 0.9353]
+-Original Grad: -0.019, -lr * Pred Grad:  -0.085, New P: -0.082
+-Original Grad: -0.012, -lr * Pred Grad:  -0.056, New P: 0.879
+iter 0 loss: 0.077
+Actual params: [-0.0821,  0.8792]
+-Original Grad: -0.007, -lr * Pred Grad:  -0.028, New P: -0.110
+-Original Grad: -0.005, -lr * Pred Grad:  -0.022, New P: 0.857
+iter 1 loss: 0.065
+Actual params: [-0.11  ,  0.8573]
+-Original Grad: -0.005, -lr * Pred Grad:  -0.019, New P: -0.129
+-Original Grad: -0.003, -lr * Pred Grad:  -0.014, New P: 0.844
+iter 2 loss: 0.062
+Actual params: [-0.1289,  0.8436]
+-Original Grad: -0.005, -lr * Pred Grad:  -0.017, New P: -0.146
+-Original Grad: -0.003, -lr * Pred Grad:  -0.013, New P: 0.831
+iter 3 loss: 0.060
+Actual params: [-0.1461,  0.831 ]
+-Original Grad: -0.004, -lr * Pred Grad:  -0.016, New P: -0.162
+-Original Grad: -0.003, -lr * Pred Grad:  -0.012, New P: 0.819
+iter 4 loss: 0.058
+Actual params: [-0.1616,  0.8193]
+-Original Grad: -0.003, -lr * Pred Grad:  -0.009, New P: -0.171
+-Original Grad: -0.002, -lr * Pred Grad:  -0.008, New P: 0.811
+iter 5 loss: 0.056
+Actual params: [-0.1707,  0.8112]
+-Original Grad: -0.002, -lr * Pred Grad:  -0.009, New P: -0.180
+-Original Grad: -0.002, -lr * Pred Grad:  -0.008, New P: 0.803
+iter 6 loss: 0.055
+Actual params: [-0.1797,  0.803 ]
+-Original Grad: -0.002, -lr * Pred Grad:  -0.009, New P: -0.188
+-Original Grad: -0.002, -lr * Pred Grad:  -0.008, New P: 0.795
+iter 7 loss: 0.054
+Actual params: [-0.1882,  0.7951]
+-Original Grad: -0.003, -lr * Pred Grad:  -0.011, New P: -0.200
+-Original Grad: -0.002, -lr * Pred Grad:  -0.007, New P: 0.788
+iter 8 loss: 0.053
+Actual params: [-0.1996,  0.7882]
+-Original Grad: -0.003, -lr * Pred Grad:  -0.013, New P: -0.213
+-Original Grad: -0.002, -lr * Pred Grad:  -0.004, New P: 0.784
+iter 9 loss: 0.052
+Actual params: [-0.213 ,  0.7843]
+-Original Grad: -0.001, -lr * Pred Grad:  -0.006, New P: -0.219
+-Original Grad: -0.001, -lr * Pred Grad:  -0.001, New P: 0.783
+iter 10 loss: 0.050
+Actual params: [-0.2191,  0.7833]
+-Original Grad: -0.001, -lr * Pred Grad:  -0.006, New P: -0.225
+-Original Grad: -0.001, -lr * Pred Grad:  -0.001, New P: 0.782
+iter 11 loss: 0.050
+Actual params: [-0.2253,  0.7823]
+-Original Grad: -0.001, -lr * Pred Grad:  -0.006, New P: -0.231
+-Original Grad: -0.001, -lr * Pred Grad:  -0.001, New P: 0.781
+iter 12 loss: 0.049
+Actual params: [-0.2315,  0.7814]
+-Original Grad: -0.001, -lr * Pred Grad:  -0.007, New P: -0.238
+-Original Grad: -0.001, -lr * Pred Grad:  -0.002, New P: 0.780
+iter 13 loss: 0.049
+Actual params: [-0.2382,  0.7796]
+-Original Grad: -0.001, -lr * Pred Grad:  -0.008, New P: -0.246
+-Original Grad: -0.001, -lr * Pred Grad:  0.000, New P: 0.780
+iter 14 loss: 0.048
+Actual params: [-0.2458,  0.7798]
+-Original Grad: -0.001, -lr * Pred Grad:  -0.007, New P: -0.253
+-Original Grad: -0.001, -lr * Pred Grad:  0.000, New P: 0.780
+iter 15 loss: 0.048
+Actual params: [-0.2532,  0.7799]
+-Original Grad: 0.000, -lr * Pred Grad:  0.000, New P: -0.253
+-Original Grad: 0.000, -lr * Pred Grad:  -0.000, New P: 0.780
+iter 16 loss: 0.047
+Actual params: [-0.2529,  0.7798]
+-Original Grad: 0.000, -lr * Pred Grad:  0.000, New P: -0.253
+-Original Grad: 0.000, -lr * Pred Grad:  -0.000, New P: 0.780
+iter 17 loss: 0.047
+Actual params: [-0.2525,  0.7796]
+-Original Grad: 0.000, -lr * Pred Grad:  0.000, New P: -0.252
+-Original Grad: 0.000, -lr * Pred Grad:  -0.000, New P: 0.779
+iter 18 loss: 0.047
+Actual params: [-0.2521,  0.7795]
+-Original Grad: 0.000, -lr * Pred Grad:  0.000, New P: -0.252
+-Original Grad: 0.000, -lr * Pred Grad:  -0.000, New P: 0.779
+iter 19 loss: 0.047
+Actual params: [-0.2516,  0.7793]
+-Original Grad: 0.000, -lr * Pred Grad:  0.001, New P: -0.251
+-Original Grad: 0.000, -lr * Pred Grad:  -0.000, New P: 0.779
+iter 20 loss: 0.047
+Actual params: [-0.2511,  0.7791]
+-Original Grad: 0.000, -lr * Pred Grad:  0.001, New P: -0.251
+-Original Grad: 0.000, -lr * Pred Grad:  -0.000, New P: 0.779
+iter 21 loss: 0.047
+Actual params: [-0.2506,  0.7789]
+-Original Grad: 0.000, -lr * Pred Grad:  0.001, New P: -0.250
+-Original Grad: 0.000, -lr * Pred Grad:  -0.000, New P: 0.779
+iter 22 loss: 0.047
+Actual params: [-0.2499,  0.7786]
+-Original Grad: 0.000, -lr * Pred Grad:  0.001, New P: -0.249
+-Original Grad: 0.000, -lr * Pred Grad:  -0.000, New P: 0.778
+iter 23 loss: 0.048
+Actual params: [-0.2492,  0.7783]
+-Original Grad: -0.001, -lr * Pred Grad:  -0.016, New P: -0.265
+-Original Grad: -0.001, -lr * Pred Grad:  0.000, New P: 0.779
+iter 24 loss: 0.048
+Actual params: [-0.2648,  0.7788]
+-Original Grad: 0.000, -lr * Pred Grad:  0.001, New P: -0.264
+-Original Grad: 0.000, -lr * Pred Grad:  -0.000, New P: 0.778
+iter 25 loss: 0.047
+Actual params: [-0.264 ,  0.7784]
+-Original Grad: 0.000, -lr * Pred Grad:  0.001, New P: -0.263
+-Original Grad: 0.000, -lr * Pred Grad:  -0.000, New P: 0.778
+iter 26 loss: 0.047
+Actual params: [-0.2632,  0.7781]
+-Original Grad: 0.000, -lr * Pred Grad:  0.001, New P: -0.262
+-Original Grad: 0.000, -lr * Pred Grad:  -0.000, New P: 0.778
+iter 27 loss: 0.047
+Actual params: [-0.2623,  0.7777]
+-Original Grad: 0.000, -lr * Pred Grad:  0.001, New P: -0.261
+-Original Grad: 0.000, -lr * Pred Grad:  -0.000, New P: 0.777
+iter 28 loss: 0.047
+Actual params: [-0.2613,  0.7772]
+-Original Grad: 0.000, -lr * Pred Grad:  0.001, New P: -0.260
+-Original Grad: 0.000, -lr * Pred Grad:  -0.000, New P: 0.777
+iter 29 loss: 0.047
+Actual params: [-0.2602,  0.7767]
+-Original Grad: 0.000, -lr * Pred Grad:  0.001, New P: -0.259
+-Original Grad: 0.000, -lr * Pred Grad:  -0.001, New P: 0.776
+iter 30 loss: 0.047
+Actual params: [-0.2589,  0.7762]
+Target params: [-1.0746]
+Actual params: [-0.6756, -1.5044]
+-Original Grad: 0.003, -lr * Pred Grad:  0.029, New P: -0.647
+-Original Grad: 0.003, -lr * Pred Grad:  0.028, New P: -1.477
+iter 0 loss: 0.041
+Actual params: [-0.647 , -1.4766]
+-Original Grad: 0.004, -lr * Pred Grad:  0.033, New P: -0.614
+-Original Grad: 0.004, -lr * Pred Grad:  0.034, New P: -1.442
+iter 1 loss: 0.040
+Actual params: [-0.6141, -1.4423]
+-Original Grad: 0.003, -lr * Pred Grad:  0.019, New P: -0.595
+-Original Grad: 0.003, -lr * Pred Grad:  0.028, New P: -1.414
+iter 2 loss: 0.038
+Actual params: [-0.5955, -1.414 ]
+-Original Grad: 0.003, -lr * Pred Grad:  0.014, New P: -0.582
+-Original Grad: 0.004, -lr * Pred Grad:  0.031, New P: -1.383
+iter 3 loss: 0.037
+Actual params: [-0.5817, -1.3832]
+-Original Grad: 0.004, -lr * Pred Grad:  0.007, New P: -0.575
+-Original Grad: 0.004, -lr * Pred Grad:  0.034, New P: -1.349
+iter 4 loss: 0.037
+Actual params: [-0.5745, -1.349 ]
+-Original Grad: 0.004, -lr * Pred Grad:  0.000, New P: -0.574
+-Original Grad: 0.005, -lr * Pred Grad:  0.039, New P: -1.310
+iter 5 loss: 0.037
+Actual params: [-0.5741, -1.3105]
+-Original Grad: 0.004, -lr * Pred Grad:  -0.007, New P: -0.581
+-Original Grad: 0.005, -lr * Pred Grad:  0.045, New P: -1.265
+iter 6 loss: 0.037
+Actual params: [-0.5809, -1.2653]
+-Original Grad: 0.005, -lr * Pred Grad:  -0.014, New P: -0.594
+-Original Grad: 0.006, -lr * Pred Grad:  0.053, New P: -1.212
+iter 7 loss: 0.037
+Actual params: [-0.5945, -1.212 ]
+-Original Grad: 0.006, -lr * Pred Grad:  -0.019, New P: -0.613
+-Original Grad: 0.006, -lr * Pred Grad:  0.060, New P: -1.152
+iter 8 loss: 0.037
+Actual params: [-0.6133, -1.152 ]
+-Original Grad: 0.005, -lr * Pred Grad:  -0.025, New P: -0.638
+-Original Grad: 0.007, -lr * Pred Grad:  0.068, New P: -1.084
+iter 9 loss: 0.036
+Actual params: [-0.6379, -1.0838]
+-Original Grad: 0.006, -lr * Pred Grad:  -0.023, New P: -0.661
+-Original Grad: 0.007, -lr * Pred Grad:  0.069, New P: -1.014
+iter 10 loss: 0.035
+Actual params: [-0.6606, -1.0143]
+-Original Grad: 0.006, -lr * Pred Grad:  -0.015, New P: -0.675
+-Original Grad: 0.006, -lr * Pred Grad:  0.055, New P: -0.960
+iter 11 loss: 0.034
+Actual params: [-0.6751, -0.9596]
+-Original Grad: 0.006, -lr * Pred Grad:  -0.007, New P: -0.682
+-Original Grad: 0.006, -lr * Pred Grad:  0.044, New P: -0.915
+iter 12 loss: 0.033
+Actual params: [-0.682 , -0.9152]
+-Original Grad: 0.007, -lr * Pred Grad:  -0.002, New P: -0.684
+-Original Grad: 0.005, -lr * Pred Grad:  0.036, New P: -0.879
+iter 13 loss: 0.033
+Actual params: [-0.6837, -0.8788]
+-Original Grad: 0.007, -lr * Pred Grad:  0.001, New P: -0.683
+-Original Grad: 0.005, -lr * Pred Grad:  0.035, New P: -0.844
+iter 14 loss: 0.034
+Actual params: [-0.6826, -0.8439]
+-Original Grad: 0.007, -lr * Pred Grad:  0.004, New P: -0.679
+-Original Grad: 0.005, -lr * Pred Grad:  0.030, New P: -0.813
+iter 15 loss: 0.034
+Actual params: [-0.6788, -0.8134]
+-Original Grad: 0.007, -lr * Pred Grad:  0.007, New P: -0.672
+-Original Grad: 0.004, -lr * Pred Grad:  0.028, New P: -0.786
+iter 16 loss: 0.034
+Actual params: [-0.6721, -0.7858]
+-Original Grad: 0.007, -lr * Pred Grad:  0.008, New P: -0.664
+-Original Grad: 0.004, -lr * Pred Grad:  0.026, New P: -0.760
+iter 17 loss: 0.034
+Actual params: [-0.6643, -0.7601]
+-Original Grad: 0.006, -lr * Pred Grad:  0.010, New P: -0.655
+-Original Grad: 0.003, -lr * Pred Grad:  0.018, New P: -0.742
+iter 18 loss: 0.034
+Actual params: [-0.6546, -0.7421]
+-Original Grad: 0.006, -lr * Pred Grad:  0.010, New P: -0.644
+-Original Grad: 0.003, -lr * Pred Grad:  0.016, New P: -0.726
+iter 19 loss: 0.034
+Actual params: [-0.6444, -0.7262]
+-Original Grad: 0.006, -lr * Pred Grad:  0.012, New P: -0.632
+-Original Grad: 0.003, -lr * Pred Grad:  0.017, New P: -0.710
+iter 20 loss: 0.034
+Actual params: [-0.6325, -0.7095]
+-Original Grad: 0.006, -lr * Pred Grad:  0.013, New P: -0.620
+-Original Grad: 0.002, -lr * Pred Grad:  0.013, New P: -0.697
+iter 21 loss: 0.034
+Actual params: [-0.6199, -0.6967]
+-Original Grad: 0.005, -lr * Pred Grad:  0.012, New P: -0.608
+-Original Grad: 0.002, -lr * Pred Grad:  0.010, New P: -0.686
+iter 22 loss: 0.034
+Actual params: [-0.6078, -0.6864]
+-Original Grad: 0.005, -lr * Pred Grad:  0.014, New P: -0.594
+-Original Grad: 0.002, -lr * Pred Grad:  0.010, New P: -0.676
+iter 23 loss: 0.034
+Actual params: [-0.5941, -0.6762]
+-Original Grad: 0.005, -lr * Pred Grad:  0.015, New P: -0.579
+-Original Grad: 0.002, -lr * Pred Grad:  0.010, New P: -0.666
+iter 24 loss: 0.034
+Actual params: [-0.5791, -0.666 ]
+-Original Grad: 0.005, -lr * Pred Grad:  0.017, New P: -0.562
+-Original Grad: 0.002, -lr * Pred Grad:  0.010, New P: -0.656
+iter 25 loss: 0.034
+Actual params: [-0.5625, -0.6559]
+-Original Grad: 0.005, -lr * Pred Grad:  0.018, New P: -0.545
+-Original Grad: 0.002, -lr * Pred Grad:  0.011, New P: -0.645
+iter 26 loss: 0.034
+Actual params: [-0.5448, -0.6451]
+-Original Grad: 0.005, -lr * Pred Grad:  0.019, New P: -0.525
+-Original Grad: 0.002, -lr * Pred Grad:  0.011, New P: -0.634
+iter 27 loss: 0.034
+Actual params: [-0.5255, -0.6344]
+-Original Grad: 0.005, -lr * Pred Grad:  0.021, New P: -0.504
+-Original Grad: 0.002, -lr * Pred Grad:  0.011, New P: -0.624
+iter 28 loss: 0.034
+Actual params: [-0.5045, -0.6238]
+-Original Grad: 0.005, -lr * Pred Grad:  0.022, New P: -0.483
+-Original Grad: 0.002, -lr * Pred Grad:  0.011, New P: -0.613
+iter 29 loss: 0.034
+Actual params: [-0.4826, -0.6132]
+-Original Grad: 0.006, -lr * Pred Grad:  0.023, New P: -0.459
+-Original Grad: 0.002, -lr * Pred Grad:  0.010, New P: -0.603
+iter 30 loss: 0.034
+Actual params: [-0.4591, -0.6029]
+Target params: [-1.0746]
+Actual params: [-0.6634, -0.2295]
+-Original Grad: 0.000, -lr * Pred Grad:  0.002, New P: -0.661
+-Original Grad: 0.000, -lr * Pred Grad:  0.001, New P: -0.228
+iter 0 loss: 0.080
+Actual params: [-0.661 , -0.2282]
+-Original Grad: 0.000, -lr * Pred Grad:  0.003, New P: -0.658
+-Original Grad: 0.000, -lr * Pred Grad:  0.001, New P: -0.227
+iter 1 loss: 0.080
+Actual params: [-0.6583, -0.2267]
+-Original Grad: 0.000, -lr * Pred Grad:  0.003, New P: -0.655
+-Original Grad: 0.000, -lr * Pred Grad:  0.002, New P: -0.225
+iter 2 loss: 0.080
+Actual params: [-0.6553, -0.2251]
+-Original Grad: 0.000, -lr * Pred Grad:  0.003, New P: -0.652
+-Original Grad: 0.000, -lr * Pred Grad:  0.002, New P: -0.223
+iter 3 loss: 0.080
+Actual params: [-0.6519, -0.2233]
+-Original Grad: 0.000, -lr * Pred Grad:  0.004, New P: -0.648
+-Original Grad: 0.000, -lr * Pred Grad:  0.002, New P: -0.221
+iter 4 loss: 0.081
+Actual params: [-0.6483, -0.2213]
+-Original Grad: 0.000, -lr * Pred Grad:  0.004, New P: -0.644
+-Original Grad: 0.000, -lr * Pred Grad:  0.002, New P: -0.219
+iter 5 loss: 0.081
+Actual params: [-0.6442, -0.2191]
+-Original Grad: 0.000, -lr * Pred Grad:  0.005, New P: -0.640
+-Original Grad: 0.000, -lr * Pred Grad:  0.002, New P: -0.217
+iter 6 loss: 0.081
+Actual params: [-0.6395, -0.2167]
+-Original Grad: 0.000, -lr * Pred Grad:  0.005, New P: -0.634
+-Original Grad: 0.000, -lr * Pred Grad:  0.003, New P: -0.214
+iter 7 loss: 0.081
+Actual params: [-0.6344, -0.214 ]
+-Original Grad: 0.000, -lr * Pred Grad:  0.006, New P: -0.629
+-Original Grad: 0.000, -lr * Pred Grad:  0.003, New P: -0.211
+iter 8 loss: 0.081
+Actual params: [-0.6286, -0.2111]
+-Original Grad: 0.000, -lr * Pred Grad:  0.007, New P: -0.622
+-Original Grad: 0.000, -lr * Pred Grad:  0.003, New P: -0.208
+iter 9 loss: 0.082
+Actual params: [-0.622 , -0.2079]
+-Original Grad: 0.000, -lr * Pred Grad:  0.007, New P: -0.615
+-Original Grad: 0.000, -lr * Pred Grad:  0.004, New P: -0.204
+iter 10 loss: 0.082
+Actual params: [-0.6146, -0.2043]
+-Original Grad: 0.000, -lr * Pred Grad:  0.008, New P: -0.606
+-Original Grad: 0.000, -lr * Pred Grad:  0.004, New P: -0.200
+iter 11 loss: 0.082
+Actual params: [-0.6062, -0.2003]
+-Original Grad: 0.000, -lr * Pred Grad:  0.009, New P: -0.597
+-Original Grad: 0.000, -lr * Pred Grad:  0.004, New P: -0.196
+iter 12 loss: 0.083
+Actual params: [-0.5968, -0.196 ]
+-Original Grad: 0.000, -lr * Pred Grad:  0.011, New P: -0.586
+-Original Grad: 0.000, -lr * Pred Grad:  0.005, New P: -0.191
+iter 13 loss: 0.083
+Actual params: [-0.586 , -0.1912]
+-Original Grad: 0.000, -lr * Pred Grad:  0.012, New P: -0.574
+-Original Grad: 0.000, -lr * Pred Grad:  0.005, New P: -0.186
+iter 14 loss: 0.084
+Actual params: [-0.5737, -0.186 ]
+-Original Grad: 0.000, -lr * Pred Grad:  0.014, New P: -0.560
+-Original Grad: 0.000, -lr * Pred Grad:  0.006, New P: -0.180
+iter 15 loss: 0.084
+Actual params: [-0.5599, -0.1803]
+-Original Grad: 0.000, -lr * Pred Grad:  0.016, New P: -0.544
+-Original Grad: 0.000, -lr * Pred Grad:  0.006, New P: -0.174
+iter 16 loss: 0.085
+Actual params: [-0.5444, -0.1741]
+-Original Grad: 0.000, -lr * Pred Grad:  0.018, New P: -0.526
+-Original Grad: 0.000, -lr * Pred Grad:  0.007, New P: -0.168
+iter 17 loss: 0.086
+Actual params: [-0.5265, -0.1676]
+-Original Grad: 0.000, -lr * Pred Grad:  0.021, New P: -0.506
+-Original Grad: 0.000, -lr * Pred Grad:  0.007, New P: -0.160
+iter 18 loss: 0.087
+Actual params: [-0.5058, -0.1603]
+-Original Grad: 0.000, -lr * Pred Grad:  0.024, New P: -0.482
+-Original Grad: 0.000, -lr * Pred Grad:  0.008, New P: -0.153
+iter 19 loss: 0.088
+Actual params: [-0.482 , -0.1526]
+-Original Grad: 0.000, -lr * Pred Grad:  0.028, New P: -0.454
+-Original Grad: 0.000, -lr * Pred Grad:  0.008, New P: -0.144
+iter 20 loss: 0.090
+Actual params: [-0.454 , -0.1442]
+-Original Grad: 0.000, -lr * Pred Grad:  0.033, New P: -0.421
+-Original Grad: 0.000, -lr * Pred Grad:  0.009, New P: -0.136
+iter 21 loss: 0.092
+Actual params: [-0.4208, -0.1357]
+-Original Grad: 0.000, -lr * Pred Grad:  0.040, New P: -0.381
+-Original Grad: 0.000, -lr * Pred Grad:  0.009, New P: -0.127
+iter 22 loss: 0.094
+Actual params: [-0.3809, -0.1267]
+-Original Grad: 0.000, -lr * Pred Grad:  0.050, New P: -0.331
+-Original Grad: 0.000, -lr * Pred Grad:  0.009, New P: -0.118
+iter 23 loss: 0.098
+Actual params: [-0.3313, -0.1178]
+-Original Grad: 0.000, -lr * Pred Grad:  0.060, New P: -0.271
+-Original Grad: 0.000, -lr * Pred Grad:  0.009, New P: -0.109
+iter 24 loss: 0.102
+Actual params: [-0.2713, -0.1085]
+-Original Grad: 0.000, -lr * Pred Grad:  0.074, New P: -0.198
+-Original Grad: 0.000, -lr * Pred Grad:  0.010, New P: -0.099
+iter 25 loss: 0.109
+Actual params: [-0.1975, -0.099 ]
+-Original Grad: 0.001, -lr * Pred Grad:  0.094, New P: -0.103
+-Original Grad: 0.000, -lr * Pred Grad:  0.010, New P: -0.089
+iter 26 loss: 0.119
+Actual params: [-0.1032, -0.089 ]
+-Original Grad: -0.006, -lr * Pred Grad:  -0.105, New P: -0.208
+-Original Grad: -0.003, -lr * Pred Grad:  -0.103, New P: -0.192
+iter 27 loss: 0.135
+Actual params: [-0.2078, -0.1925]
+-Original Grad: 0.001, -lr * Pred Grad:  0.016, New P: -0.192
+-Original Grad: 0.000, -lr * Pred Grad:  -0.004, New P: -0.197
+iter 28 loss: 0.109
+Actual params: [-0.1921, -0.1969]
+-Original Grad: 0.001, -lr * Pred Grad:  0.017, New P: -0.175
+-Original Grad: 0.000, -lr * Pred Grad:  -0.003, New P: -0.200
+iter 29 loss: 0.110
+Actual params: [-0.1749, -0.2004]
+-Original Grad: 0.001, -lr * Pred Grad:  0.019, New P: -0.156
+-Original Grad: 0.000, -lr * Pred Grad:  -0.002, New P: -0.202
+iter 30 loss: 0.112
+Actual params: [-0.156 , -0.2024]
+Target params: [-1.0746]
+Actual params: [-0.8962,  0.1733]
+-Original Grad: -0.000, -lr * Pred Grad:  -0.000, New P: -0.896
+-Original Grad: -0.000, -lr * Pred Grad:  -0.000, New P: 0.173
+iter 0 loss: 0.072
+Actual params: [-0.8964,  0.1732]
+-Original Grad: -0.000, -lr * Pred Grad:  -0.000, New P: -0.896
+-Original Grad: -0.000, -lr * Pred Grad:  -0.000, New P: 0.173
+iter 1 loss: 0.072
+Actual params: [-0.8965,  0.173 ]
+-Original Grad: -0.000, -lr * Pred Grad:  -0.000, New P: -0.897
+-Original Grad: -0.000, -lr * Pred Grad:  -0.000, New P: 0.173
+iter 2 loss: 0.072
+Actual params: [-0.8966,  0.1728]
+-Original Grad: -0.000, -lr * Pred Grad:  -0.000, New P: -0.897
+-Original Grad: -0.000, -lr * Pred Grad:  -0.000, New P: 0.173
+iter 3 loss: 0.072
+Actual params: [-0.8967,  0.1726]
+-Original Grad: -0.000, -lr * Pred Grad:  -0.000, New P: -0.897
+-Original Grad: -0.000, -lr * Pred Grad:  -0.000, New P: 0.172
+iter 4 loss: 0.072
+Actual params: [-0.8969,  0.1724]
+-Original Grad: -0.000, -lr * Pred Grad:  -0.000, New P: -0.897
+-Original Grad: -0.000, -lr * Pred Grad:  -0.000, New P: 0.172
+iter 5 loss: 0.072
+Actual params: [-0.8971,  0.1721]
+-Original Grad: -0.000, -lr * Pred Grad:  -0.000, New P: -0.897
+-Original Grad: -0.000, -lr * Pred Grad:  -0.000, New P: 0.172
+iter 6 loss: 0.072
+Actual params: [-0.8972,  0.1718]
+-Original Grad: -0.000, -lr * Pred Grad:  -0.000, New P: -0.897
+-Original Grad: -0.000, -lr * Pred Grad:  -0.000, New P: 0.172
+iter 7 loss: 0.072
+Actual params: [-0.8975,  0.1715]
+-Original Grad: -0.000, -lr * Pred Grad:  -0.000, New P: -0.898
+-Original Grad: -0.000, -lr * Pred Grad:  -0.000, New P: 0.171
+iter 8 loss: 0.072
+Actual params: [-0.8977,  0.1712]
+-Original Grad: -0.000, -lr * Pred Grad:  -0.000, New P: -0.898
+-Original Grad: -0.000, -lr * Pred Grad:  -0.000, New P: 0.171
+iter 9 loss: 0.072
+Actual params: [-0.8979,  0.1708]
+-Original Grad: -0.000, -lr * Pred Grad:  -0.000, New P: -0.898
+-Original Grad: -0.000, -lr * Pred Grad:  -0.000, New P: 0.170
+iter 10 loss: 0.072
+Actual params: [-0.8982,  0.1704]
+-Original Grad: -0.000, -lr * Pred Grad:  -0.000, New P: -0.899
+-Original Grad: -0.000, -lr * Pred Grad:  -0.000, New P: 0.170
+iter 11 loss: 0.072
+Actual params: [-0.8986,  0.1699]
+-Original Grad: -0.000, -lr * Pred Grad:  -0.000, New P: -0.899
+-Original Grad: -0.000, -lr * Pred Grad:  -0.001, New P: 0.169
+iter 12 loss: 0.072
+Actual params: [-0.8989,  0.1694]
+-Original Grad: -0.000, -lr * Pred Grad:  -0.000, New P: -0.899
+-Original Grad: -0.000, -lr * Pred Grad:  -0.001, New P: 0.169
+iter 13 loss: 0.072
+Actual params: [-0.8993,  0.1688]
+-Original Grad: -0.000, -lr * Pred Grad:  -0.000, New P: -0.900
+-Original Grad: -0.000, -lr * Pred Grad:  -0.001, New P: 0.168
+iter 14 loss: 0.072
+Actual params: [-0.8997,  0.1681]
+-Original Grad: -0.000, -lr * Pred Grad:  -0.000, New P: -0.900
+-Original Grad: -0.000, -lr * Pred Grad:  -0.001, New P: 0.167
+iter 15 loss: 0.072
+Actual params: [-0.9002,  0.1674]
+-Original Grad: -0.000, -lr * Pred Grad:  -0.001, New P: -0.901
+-Original Grad: -0.000, -lr * Pred Grad:  -0.001, New P: 0.167
+iter 16 loss: 0.072
+Actual params: [-0.9008,  0.1666]
+-Original Grad: -0.000, -lr * Pred Grad:  -0.001, New P: -0.901
+-Original Grad: -0.000, -lr * Pred Grad:  -0.001, New P: 0.166
+iter 17 loss: 0.072
+Actual params: [-0.9013,  0.1657]
+-Original Grad: -0.000, -lr * Pred Grad:  -0.001, New P: -0.902
+-Original Grad: -0.000, -lr * Pred Grad:  -0.001, New P: 0.165
+iter 18 loss: 0.072
+Actual params: [-0.902 ,  0.1647]
+-Original Grad: -0.000, -lr * Pred Grad:  -0.001, New P: -0.903
+-Original Grad: -0.000, -lr * Pred Grad:  -0.001, New P: 0.164
+iter 19 loss: 0.072
+Actual params: [-0.9027,  0.1636]
+-Original Grad: -0.000, -lr * Pred Grad:  -0.001, New P: -0.904
+-Original Grad: -0.000, -lr * Pred Grad:  -0.001, New P: 0.162
+iter 20 loss: 0.072
+Actual params: [-0.9035,  0.1624]
+-Original Grad: -0.000, -lr * Pred Grad:  -0.001, New P: -0.904
+-Original Grad: -0.000, -lr * Pred Grad:  -0.001, New P: 0.161
+iter 21 loss: 0.072
+Actual params: [-0.9044,  0.1611]
+-Original Grad: -0.000, -lr * Pred Grad:  -0.001, New P: -0.905
+-Original Grad: -0.000, -lr * Pred Grad:  -0.001, New P: 0.160
+iter 22 loss: 0.072
+Actual params: [-0.9054,  0.1596]
+-Original Grad: -0.000, -lr * Pred Grad:  -0.001, New P: -0.906
+-Original Grad: -0.000, -lr * Pred Grad:  -0.002, New P: 0.158
+iter 23 loss: 0.071
+Actual params: [-0.9065,  0.158 ]
+-Original Grad: -0.000, -lr * Pred Grad:  -0.001, New P: -0.908
+-Original Grad: -0.000, -lr * Pred Grad:  -0.002, New P: 0.156
+iter 24 loss: 0.071
+Actual params: [-0.9077,  0.1562]
+-Original Grad: -0.000, -lr * Pred Grad:  -0.001, New P: -0.909
+-Original Grad: -0.000, -lr * Pred Grad:  -0.002, New P: 0.154
+iter 25 loss: 0.071
+Actual params: [-0.909 ,  0.1542]
+-Original Grad: -0.000, -lr * Pred Grad:  -0.001, New P: -0.910
+-Original Grad: -0.000, -lr * Pred Grad:  -0.002, New P: 0.152
+iter 26 loss: 0.071
+Actual params: [-0.9104,  0.152 ]
+-Original Grad: -0.000, -lr * Pred Grad:  -0.002, New P: -0.912
+-Original Grad: -0.000, -lr * Pred Grad:  -0.002, New P: 0.150
+iter 27 loss: 0.071
+Actual params: [-0.912 ,  0.1495]
+-Original Grad: -0.000, -lr * Pred Grad:  -0.002, New P: -0.914
+-Original Grad: -0.000, -lr * Pred Grad:  -0.003, New P: 0.147
+iter 28 loss: 0.071
+Actual params: [-0.9138,  0.1469]
+-Original Grad: -0.000, -lr * Pred Grad:  -0.002, New P: -0.916
+-Original Grad: -0.000, -lr * Pred Grad:  -0.003, New P: 0.144
+iter 29 loss: 0.071
+Actual params: [-0.9157,  0.1439]
+-Original Grad: -0.000, -lr * Pred Grad:  -0.002, New P: -0.918
+-Original Grad: -0.000, -lr * Pred Grad:  -0.003, New P: 0.141
+iter 30 loss: 0.071
+Actual params: [-0.9179,  0.1406]
+Target params: [-1.0746]
+Actual params: [1.5544, 0.3381]
+-Original Grad: 0.010, -lr * Pred Grad:  0.019, New P: 1.573
+-Original Grad: -0.076, -lr * Pred Grad:  -0.137, New P: 0.201
+iter 0 loss: 0.110
+Actual params: [1.5731, 0.2006]
+-Original Grad: 0.006, -lr * Pred Grad:  0.037, New P: 1.611
+-Original Grad: -0.033, -lr * Pred Grad:  -0.032, New P: 0.169
+iter 1 loss: 0.070
+Actual params: [1.6106, 0.1691]
+-Original Grad: 0.006, -lr * Pred Grad:  0.047, New P: 1.658
+-Original Grad: -0.014, -lr * Pred Grad:  -0.010, New P: 0.159
+iter 2 loss: 0.059
+Actual params: [1.6577, 0.1592]
+-Original Grad: 0.004, -lr * Pred Grad:  0.032, New P: 1.690
+-Original Grad: -0.012, -lr * Pred Grad:  -0.008, New P: 0.151
+iter 3 loss: 0.055
+Actual params: [1.6898, 0.1512]
+-Original Grad: 0.004, -lr * Pred Grad:  0.034, New P: 1.724
+-Original Grad: -0.005, -lr * Pred Grad:  -0.004, New P: 0.147
+iter 4 loss: 0.052
+Actual params: [1.7241, 0.1474]
+-Original Grad: 0.004, -lr * Pred Grad:  0.034, New P: 1.759
+-Original Grad: -0.005, -lr * Pred Grad:  -0.004, New P: 0.144
+iter 5 loss: 0.049
+Actual params: [1.7586, 0.1437]
+-Original Grad: 0.003, -lr * Pred Grad:  0.031, New P: 1.790
+-Original Grad: -0.005, -lr * Pred Grad:  -0.003, New P: 0.140
+iter 6 loss: 0.048
+Actual params: [1.7896, 0.1402]
+-Original Grad: 0.002, -lr * Pred Grad:  0.024, New P: 1.813
+-Original Grad: -0.003, -lr * Pred Grad:  -0.002, New P: 0.138
+iter 7 loss: 0.046
+Actual params: [1.8133, 0.1378]
+-Original Grad: 0.002, -lr * Pred Grad:  0.025, New P: 1.838
+-Original Grad: -0.003, -lr * Pred Grad:  -0.002, New P: 0.135
+iter 8 loss: 0.045
+Actual params: [1.8382, 0.1353]
+-Original Grad: 0.002, -lr * Pred Grad:  0.024, New P: 1.862
+-Original Grad: -0.003, -lr * Pred Grad:  -0.002, New P: 0.133
+iter 9 loss: 0.044
+Actual params: [1.8622, 0.133 ]
+-Original Grad: 0.002, -lr * Pred Grad:  0.023, New P: 1.885
+-Original Grad: -0.003, -lr * Pred Grad:  -0.002, New P: 0.131
+iter 10 loss: 0.043
+Actual params: [1.8854, 0.1309]
+-Original Grad: 0.001, -lr * Pred Grad:  0.023, New P: 1.908
+-Original Grad: -0.002, -lr * Pred Grad:  -0.002, New P: 0.129
+iter 11 loss: 0.042
+Actual params: [1.9081, 0.1289]
+-Original Grad: 0.001, -lr * Pred Grad:  0.022, New P: 1.930
+-Original Grad: -0.002, -lr * Pred Grad:  -0.002, New P: 0.127
+iter 12 loss: 0.042
+Actual params: [1.9302, 0.127 ]
+-Original Grad: 0.001, -lr * Pred Grad:  0.023, New P: 1.954
+-Original Grad: -0.002, -lr * Pred Grad:  -0.002, New P: 0.125
+iter 13 loss: 0.041
+Actual params: [1.9536, 0.1252]
+-Original Grad: 0.001, -lr * Pred Grad:  0.024, New P: 1.977
+-Original Grad: -0.002, -lr * Pred Grad:  -0.002, New P: 0.123
+iter 14 loss: 0.040
+Actual params: [1.9775, 0.1234]
+-Original Grad: 0.001, -lr * Pred Grad:  0.023, New P: 2.001
+-Original Grad: -0.001, -lr * Pred Grad:  -0.002, New P: 0.122
+iter 15 loss: 0.040
+Actual params: [2.0008, 0.1218]
+-Original Grad: 0.001, -lr * Pred Grad:  0.025, New P: 2.026
+-Original Grad: -0.001, -lr * Pred Grad:  -0.002, New P: 0.120
+iter 16 loss: 0.039
+Actual params: [2.0256, 0.1202]
+-Original Grad: 0.001, -lr * Pred Grad:  0.024, New P: 2.050
+-Original Grad: -0.001, -lr * Pred Grad:  -0.002, New P: 0.119
+iter 17 loss: 0.039
+Actual params: [2.0501, 0.1186]
+-Original Grad: 0.001, -lr * Pred Grad:  0.025, New P: 2.075
+-Original Grad: -0.001, -lr * Pred Grad:  -0.002, New P: 0.117
+iter 18 loss: 0.038
+Actual params: [2.0754, 0.1171]
+-Original Grad: 0.001, -lr * Pred Grad:  0.024, New P: 2.099
+-Original Grad: 0.001, -lr * Pred Grad:  -0.001, New P: 0.116
+iter 19 loss: 0.037
+Actual params: [2.099 , 0.1164]
+-Original Grad: 0.001, -lr * Pred Grad:  0.026, New P: 2.125
+-Original Grad: 0.001, -lr * Pred Grad:  -0.001, New P: 0.116
+iter 20 loss: 0.037
+Actual params: [2.1252, 0.1156]
+-Original Grad: 0.001, -lr * Pred Grad:  0.029, New P: 2.154
+-Original Grad: 0.001, -lr * Pred Grad:  -0.001, New P: 0.115
+iter 21 loss: 0.037
+Actual params: [2.154 , 0.1146]
+-Original Grad: 0.001, -lr * Pred Grad:  0.032, New P: 2.186
+-Original Grad: 0.001, -lr * Pred Grad:  -0.001, New P: 0.114
+iter 22 loss: 0.036
+Actual params: [2.1858, 0.1136]
+-Original Grad: 0.001, -lr * Pred Grad:  0.034, New P: 2.219
+-Original Grad: 0.001, -lr * Pred Grad:  -0.001, New P: 0.112
+iter 23 loss: 0.036
+Actual params: [2.2195, 0.1124]
+-Original Grad: 0.001, -lr * Pred Grad:  0.036, New P: 2.255
+-Original Grad: 0.001, -lr * Pred Grad:  -0.001, New P: 0.111
+iter 24 loss: 0.036
+Actual params: [2.2554, 0.1112]
+-Original Grad: 0.001, -lr * Pred Grad:  0.038, New P: 2.293
+-Original Grad: 0.001, -lr * Pred Grad:  -0.001, New P: 0.110
+iter 25 loss: 0.035
+Actual params: [2.2931, 0.1099]
+-Original Grad: 0.001, -lr * Pred Grad:  0.042, New P: 2.335
+-Original Grad: 0.001, -lr * Pred Grad:  -0.001, New P: 0.108
+iter 26 loss: 0.035
+Actual params: [2.3348, 0.1084]
+-Original Grad: 0.001, -lr * Pred Grad:  0.043, New P: 2.378
+-Original Grad: 0.001, -lr * Pred Grad:  -0.002, New P: 0.107
+iter 27 loss: 0.034
+Actual params: [2.3777, 0.1069]
+-Original Grad: 0.001, -lr * Pred Grad:  0.046, New P: 2.424
+-Original Grad: 0.000, -lr * Pred Grad:  -0.002, New P: 0.105
+iter 28 loss: 0.034
+Actual params: [2.4238, 0.1052]
+-Original Grad: 0.001, -lr * Pred Grad:  0.049, New P: 2.473
+-Original Grad: 0.000, -lr * Pred Grad:  -0.002, New P: 0.103
+iter 29 loss: 0.033
+Actual params: [2.4729, 0.1033]
+-Original Grad: 0.001, -lr * Pred Grad:  0.051, New P: 2.524
+-Original Grad: 0.000, -lr * Pred Grad:  -0.002, New P: 0.101
+iter 30 loss: 0.033
+Actual params: [2.5243, 0.1014]
+Target params: [-1.0746]
+Actual params: [-0.7899, -0.493 ]
+-Original Grad: 0.000, -lr * Pred Grad:  0.000, New P: -0.790
+-Original Grad: 0.000, -lr * Pred Grad:  0.000, New P: -0.493
+iter 0 loss: 0.044
+Actual params: [-0.7896, -0.4925]
+-Original Grad: 0.000, -lr * Pred Grad:  0.000, New P: -0.789
+-Original Grad: 0.000, -lr * Pred Grad:  0.001, New P: -0.492
+iter 1 loss: 0.044
+Actual params: [-0.7892, -0.492 ]
+-Original Grad: 0.000, -lr * Pred Grad:  0.000, New P: -0.789
+-Original Grad: 0.000, -lr * Pred Grad:  0.001, New P: -0.491
+iter 2 loss: 0.044
+Actual params: [-0.7888, -0.4913]
+-Original Grad: 0.000, -lr * Pred Grad:  0.000, New P: -0.788
+-Original Grad: 0.000, -lr * Pred Grad:  0.001, New P: -0.491
+iter 3 loss: 0.044
+Actual params: [-0.7883, -0.4907]
+-Original Grad: 0.000, -lr * Pred Grad:  0.001, New P: -0.788
+-Original Grad: 0.000, -lr * Pred Grad:  0.001, New P: -0.490
+iter 4 loss: 0.044
+Actual params: [-0.7877, -0.4899]
+-Original Grad: 0.000, -lr * Pred Grad:  0.001, New P: -0.787
+-Original Grad: 0.000, -lr * Pred Grad:  0.001, New P: -0.489
+iter 5 loss: 0.044
+Actual params: [-0.7871, -0.489 ]
+-Original Grad: 0.000, -lr * Pred Grad:  0.001, New P: -0.786
+-Original Grad: 0.000, -lr * Pred Grad:  0.001, New P: -0.488
+iter 6 loss: 0.044
+Actual params: [-0.7864, -0.4881]
+-Original Grad: 0.000, -lr * Pred Grad:  0.001, New P: -0.786
+-Original Grad: 0.000, -lr * Pred Grad:  0.001, New P: -0.487
+iter 7 loss: 0.044
+Actual params: [-0.7857, -0.4871]
+-Original Grad: 0.000, -lr * Pred Grad:  0.001, New P: -0.785
+-Original Grad: 0.000, -lr * Pred Grad:  0.001, New P: -0.486
+iter 8 loss: 0.044
+Actual params: [-0.7848, -0.4859]
+-Original Grad: 0.000, -lr * Pred Grad:  0.001, New P: -0.784
+-Original Grad: 0.000, -lr * Pred Grad:  0.001, New P: -0.485
+iter 9 loss: 0.044
+Actual params: [-0.7839, -0.4846]
+-Original Grad: 0.000, -lr * Pred Grad:  0.001, New P: -0.783
+-Original Grad: 0.000, -lr * Pred Grad:  0.001, New P: -0.483
+iter 10 loss: 0.044
+Actual params: [-0.7828, -0.4832]
+-Original Grad: 0.000, -lr * Pred Grad:  0.001, New P: -0.782
+-Original Grad: 0.000, -lr * Pred Grad:  0.002, New P: -0.482
+iter 11 loss: 0.044
+Actual params: [-0.7817, -0.4816]
+-Original Grad: 0.000, -lr * Pred Grad:  0.001, New P: -0.780
+-Original Grad: 0.000, -lr * Pred Grad:  0.002, New P: -0.480
+iter 12 loss: 0.044
+Actual params: [-0.7804, -0.4798]
+-Original Grad: 0.000, -lr * Pred Grad:  0.001, New P: -0.779
+-Original Grad: 0.000, -lr * Pred Grad:  0.002, New P: -0.478
+iter 13 loss: 0.044
+Actual params: [-0.7789, -0.4778]
+-Original Grad: 0.000, -lr * Pred Grad:  0.002, New P: -0.777
+-Original Grad: 0.000, -lr * Pred Grad:  0.002, New P: -0.476
+iter 14 loss: 0.044
+Actual params: [-0.7772, -0.4756]
+-Original Grad: 0.000, -lr * Pred Grad:  0.002, New P: -0.775
+-Original Grad: 0.000, -lr * Pred Grad:  0.002, New P: -0.473
+iter 15 loss: 0.044
+Actual params: [-0.7754, -0.4732]
+-Original Grad: 0.000, -lr * Pred Grad:  0.002, New P: -0.773
+-Original Grad: 0.000, -lr * Pred Grad:  0.003, New P: -0.470
+iter 16 loss: 0.044
+Actual params: [-0.7733, -0.4704]
+-Original Grad: 0.000, -lr * Pred Grad:  0.002, New P: -0.771
+-Original Grad: 0.000, -lr * Pred Grad:  0.003, New P: -0.467
+iter 17 loss: 0.044
+Actual params: [-0.7709, -0.4674]
+-Original Grad: 0.000, -lr * Pred Grad:  0.003, New P: -0.768
+-Original Grad: 0.000, -lr * Pred Grad:  0.003, New P: -0.464
+iter 18 loss: 0.044
+Actual params: [-0.7683, -0.464 ]
+-Original Grad: 0.000, -lr * Pred Grad:  0.003, New P: -0.765
+-Original Grad: 0.000, -lr * Pred Grad:  0.004, New P: -0.460
+iter 19 loss: 0.044
+Actual params: [-0.7653, -0.4603]
+-Original Grad: 0.000, -lr * Pred Grad:  0.003, New P: -0.762
+-Original Grad: 0.000, -lr * Pred Grad:  0.004, New P: -0.456
+iter 20 loss: 0.044
+Actual params: [-0.762 , -0.4561]
+-Original Grad: 0.000, -lr * Pred Grad:  0.004, New P: -0.758
+-Original Grad: 0.000, -lr * Pred Grad:  0.005, New P: -0.451
+iter 21 loss: 0.044
+Actual params: [-0.7583, -0.4514]
+-Original Grad: 0.000, -lr * Pred Grad:  0.004, New P: -0.754
+-Original Grad: 0.000, -lr * Pred Grad:  0.005, New P: -0.446
+iter 22 loss: 0.044
+Actual params: [-0.754 , -0.4463]
+-Original Grad: 0.000, -lr * Pred Grad:  0.005, New P: -0.749
+-Original Grad: 0.000, -lr * Pred Grad:  0.006, New P: -0.440
+iter 23 loss: 0.044
+Actual params: [-0.7493, -0.4405]
+-Original Grad: 0.000, -lr * Pred Grad:  0.005, New P: -0.744
+-Original Grad: 0.000, -lr * Pred Grad:  0.006, New P: -0.434
+iter 24 loss: 0.044
+Actual params: [-0.7438, -0.434 ]
+-Original Grad: 0.000, -lr * Pred Grad:  0.006, New P: -0.738
+-Original Grad: 0.000, -lr * Pred Grad:  0.007, New P: -0.427
+iter 25 loss: 0.044
+Actual params: [-0.7377, -0.4269]
+-Original Grad: 0.000, -lr * Pred Grad:  0.007, New P: -0.730
+-Original Grad: 0.000, -lr * Pred Grad:  0.008, New P: -0.419
+iter 26 loss: 0.044
+Actual params: [-0.7305, -0.4189]
+-Original Grad: 0.000, -lr * Pred Grad:  0.008, New P: -0.722
+-Original Grad: 0.000, -lr * Pred Grad:  0.009, New P: -0.410
+iter 27 loss: 0.044
+Actual params: [-0.7223, -0.41  ]
+-Original Grad: 0.000, -lr * Pred Grad:  0.009, New P: -0.713
+-Original Grad: 0.000, -lr * Pred Grad:  0.010, New P: -0.400
+iter 28 loss: 0.044
+Actual params: [-0.7129, -0.4001]
+-Original Grad: 0.000, -lr * Pred Grad:  0.011, New P: -0.702
+-Original Grad: 0.000, -lr * Pred Grad:  0.011, New P: -0.389
+iter 29 loss: 0.044
+Actual params: [-0.7022, -0.3891]
+-Original Grad: 0.000, -lr * Pred Grad:  0.013, New P: -0.690
+-Original Grad: 0.000, -lr * Pred Grad:  0.012, New P: -0.377
+iter 30 loss: 0.044
+Actual params: [-0.6895, -0.3768]
+Target params: [-1.0746]
+Actual params: [0.3685, 0.155 ]
+-Original Grad: -0.682, -lr * Pred Grad:  -0.219, New P: 0.150
+-Original Grad: -0.234, -lr * Pred Grad:  -0.182, New P: -0.027
+iter 0 loss: 0.337
+Actual params: [ 0.15  , -0.0273]
+-Original Grad: -0.423, -lr * Pred Grad:  -0.100, New P: 0.050
+-Original Grad: -0.125, -lr * Pred Grad:  -0.026, New P: -0.053
+iter 1 loss: 0.233
+Actual params: [ 0.0504, -0.0535]
+-Original Grad: -0.283, -lr * Pred Grad:  -0.009, New P: 0.042
+-Original Grad: -0.114, -lr * Pred Grad:  -0.174, New P: -0.227
+iter 2 loss: 0.197
+Actual params: [ 0.0415, -0.2275]
+-Original Grad: -0.210, -lr * Pred Grad:  0.051, New P: 0.092
+-Original Grad: -0.125, -lr * Pred Grad:  -0.272, New P: -0.499
+iter 3 loss: 0.172
+Actual params: [ 0.0921, -0.4991]
+-Original Grad: -0.122, -lr * Pred Grad:  0.065, New P: 0.157
+-Original Grad: -0.115, -lr * Pred Grad:  -0.232, New P: -0.731
+iter 4 loss: 0.139
+Actual params: [ 0.157 , -0.7312]
+-Original Grad: -0.069, -lr * Pred Grad:  0.048, New P: 0.205
+-Original Grad: -0.089, -lr * Pred Grad:  -0.149, New P: -0.880
+iter 5 loss: 0.107
+Actual params: [ 0.205 , -0.8798]
+-Original Grad: -0.046, -lr * Pred Grad:  0.034, New P: 0.239
+-Original Grad: -0.071, -lr * Pred Grad:  -0.097, New P: -0.977
+iter 6 loss: 0.086
+Actual params: [ 0.2385, -0.977 ]
+-Original Grad: -0.036, -lr * Pred Grad:  0.023, New P: 0.262
+-Original Grad: -0.057, -lr * Pred Grad:  -0.067, New P: -1.044
+iter 7 loss: 0.073
+Actual params: [ 0.2619, -1.044 ]
+-Original Grad: -0.030, -lr * Pred Grad:  0.018, New P: 0.280
+-Original Grad: -0.048, -lr * Pred Grad:  -0.051, New P: -1.095
+iter 8 loss: 0.064
+Actual params: [ 0.2797, -1.0951]
+-Original Grad: -0.026, -lr * Pred Grad:  0.014, New P: 0.294
+-Original Grad: -0.042, -lr * Pred Grad:  -0.041, New P: -1.136
+iter 9 loss: 0.057
+Actual params: [ 0.2942, -1.1363]
+-Original Grad: -0.022, -lr * Pred Grad:  0.013, New P: 0.308
+-Original Grad: -0.038, -lr * Pred Grad:  -0.036, New P: -1.172
+iter 10 loss: 0.052
+Actual params: [ 0.3075, -1.1724]
+-Original Grad: -0.021, -lr * Pred Grad:  0.009, New P: 0.317
+-Original Grad: -0.033, -lr * Pred Grad:  -0.028, New P: -1.201
+iter 11 loss: 0.048
+Actual params: [ 0.3167, -1.2006]
+-Original Grad: -0.020, -lr * Pred Grad:  0.004, New P: 0.321
+-Original Grad: -0.027, -lr * Pred Grad:  -0.020, New P: -1.221
+iter 12 loss: 0.044
+Actual params: [ 0.3211, -1.2206]
+-Original Grad: -0.019, -lr * Pred Grad:  0.002, New P: 0.323
+-Original Grad: -0.024, -lr * Pred Grad:  -0.016, New P: -1.237
+iter 13 loss: 0.041
+Actual params: [ 0.3233, -1.237 ]
+-Original Grad: -0.018, -lr * Pred Grad:  0.001, New P: 0.325
+-Original Grad: -0.023, -lr * Pred Grad:  -0.015, New P: -1.252
+iter 14 loss: 0.039
+Actual params: [ 0.3247, -1.2521]
+-Original Grad: -0.017, -lr * Pred Grad:  0.001, New P: 0.325
+-Original Grad: -0.022, -lr * Pred Grad:  -0.014, New P: -1.266
+iter 15 loss: 0.037
+Actual params: [ 0.3253, -1.2656]
+-Original Grad: -0.016, -lr * Pred Grad:  -0.001, New P: 0.325
+-Original Grad: -0.020, -lr * Pred Grad:  -0.012, New P: -1.278
+iter 16 loss: 0.035
+Actual params: [ 0.3247, -1.2777]
+-Original Grad: -0.015, -lr * Pred Grad:  -0.001, New P: 0.324
+-Original Grad: -0.020, -lr * Pred Grad:  -0.011, New P: -1.289
+iter 17 loss: 0.033
+Actual params: [ 0.3236, -1.2889]
+-Original Grad: -0.014, -lr * Pred Grad:  -0.002, New P: 0.321
+-Original Grad: -0.017, -lr * Pred Grad:  -0.009, New P: -1.298
+iter 18 loss: 0.032
+Actual params: [ 0.3213, -1.2981]
+-Original Grad: -0.013, -lr * Pred Grad:  -0.003, New P: 0.319
+-Original Grad: -0.016, -lr * Pred Grad:  -0.009, New P: -1.307
+iter 19 loss: 0.030
+Actual params: [ 0.3188, -1.3071]
+-Original Grad: -0.013, -lr * Pred Grad:  -0.003, New P: 0.316
+-Original Grad: -0.016, -lr * Pred Grad:  -0.009, New P: -1.316
+iter 20 loss: 0.029
+Actual params: [ 0.3158, -1.3157]
+-Original Grad: -0.013, -lr * Pred Grad:  -0.004, New P: 0.311
+-Original Grad: -0.014, -lr * Pred Grad:  -0.007, New P: -1.323
+iter 21 loss: 0.028
+Actual params: [ 0.3114, -1.323 ]
+-Original Grad: -0.012, -lr * Pred Grad:  -0.005, New P: 0.306
+-Original Grad: -0.013, -lr * Pred Grad:  -0.006, New P: -1.329
+iter 22 loss: 0.027
+Actual params: [ 0.3062, -1.3292]
+-Original Grad: -0.012, -lr * Pred Grad:  -0.006, New P: 0.300
+-Original Grad: -0.013, -lr * Pred Grad:  -0.006, New P: -1.335
+iter 23 loss: 0.026
+Actual params: [ 0.3   , -1.3355]
+-Original Grad: -0.011, -lr * Pred Grad:  -0.006, New P: 0.294
+-Original Grad: -0.012, -lr * Pred Grad:  -0.007, New P: -1.342
+iter 24 loss: 0.024
+Actual params: [ 0.2942, -1.3422]
+-Original Grad: -0.011, -lr * Pred Grad:  -0.006, New P: 0.288
+-Original Grad: -0.012, -lr * Pred Grad:  -0.007, New P: -1.349
+iter 25 loss: 0.023
+Actual params: [ 0.2884, -1.3494]
+-Original Grad: -0.011, -lr * Pred Grad:  -0.006, New P: 0.283
+-Original Grad: -0.013, -lr * Pred Grad:  -0.009, New P: -1.358
+iter 26 loss: 0.022
+Actual params: [ 0.2828, -1.3581]
+-Original Grad: -0.010, -lr * Pred Grad:  -0.005, New P: 0.278
+-Original Grad: -0.012, -lr * Pred Grad:  -0.009, New P: -1.367
+iter 27 loss: 0.021
+Actual params: [ 0.2776, -1.3672]
+-Original Grad: -0.009, -lr * Pred Grad:  -0.005, New P: 0.273
+-Original Grad: -0.011, -lr * Pred Grad:  -0.010, New P: -1.377
+iter 28 loss: 0.020
+Actual params: [ 0.2728, -1.3767]
+-Original Grad: -0.009, -lr * Pred Grad:  -0.005, New P: 0.268
+-Original Grad: -0.011, -lr * Pred Grad:  -0.009, New P: -1.386
+iter 29 loss: 0.019
+Actual params: [ 0.2678, -1.3862]
+-Original Grad: -0.008, -lr * Pred Grad:  -0.004, New P: 0.264
+-Original Grad: -0.010, -lr * Pred Grad:  -0.010, New P: -1.396
+iter 30 loss: 0.019
+Actual params: [ 0.2636, -1.3964]
