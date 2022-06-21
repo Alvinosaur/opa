@@ -9,9 +9,9 @@ import torch
 
 from data_params import Params
 from model import Policy, PolicyNetwork
-from train import load_batch, process_batch_data, DEVICE
+from train import load_batch, process_batch_data, batch_inner_loop, DEVICE
 from online_adaptation import adaptation_loss
-
+from loss_plot_helpers import plot_2d_contour
 from dataset import Dataset
 
 
@@ -44,7 +44,7 @@ def evaluate_helper(policy: Policy, adaptation_func, batch_data, train_pos, trai
     return losses
 
 
-def eval_performance(policy: Policy, dataset, dstep, calc_pos, calc_rot):
+def eval_performance_pos(policy: Policy, dataset, dstep, use_dot_prod=False):
     """
     Visually evalutes 2D policy with varying number of adaptation steps, where
     adaptation is performed directly on expert data.
@@ -54,6 +54,7 @@ def eval_performance(policy: Policy, dataset, dstep, calc_pos, calc_rot):
     :return:
     """
     # Update over both pos and rot data one-by-one
+    assert not dataset[0]["is_rot"]
     batch_size = 32
     indices = np.arange(len(dataset))
     np.random.shuffle(indices)
@@ -62,14 +63,60 @@ def eval_performance(policy: Policy, dataset, dstep, calc_pos, calc_rot):
 
     total_loss = 0.0
     for b in range(num_batches):
-        # Position parameter adaptation
+        batch_indices = indices[b * batch_size:(b + 1) * batch_size]
+        batch_data = load_batch(dataset, batch_indices)
+        if use_dot_prod:
+            n_samples = 64
+            with torch.no_grad():
+                loss, _ = batch_inner_loop(policy.policy_network, batch_data=batch_data,
+                                           n_samples=n_samples,
+                                           train_rot=False,
+                                           is_3D=False, is_training=False)
+        else:
+            batch_data_processed = process_batch_data(
+                batch_data, train_rot=None, n_samples=None, is_full_traj=True)
+            with torch.no_grad():
+                loss, _ = adaptation_loss(policy.policy_network, batch_data_processed, dstep,
+                                          train_pos=True, train_rot=False,
+                                          goal_pos_radius_scale=1.0)
+
+        total_loss += loss * len(batch_indices)
+
+    return total_loss / len(dataset)
+
+
+def eval_performance_rot(policy: Policy, dataset, dstep, care_rot):
+    """
+    Visually evalutes 2D policy with varying number of adaptation steps, where
+    adaptation is performed directly on expert data.
+
+    :param policy: Policy to evaluate
+    :param test_data_root: Root directory of test data
+    :return:
+    """
+    # Update over both pos and rot data one-by-one
+    assert dataset[0]["is_rot"]
+    batch_size = 32
+    object_types = [dataset[i]['object_types'].item()
+                    for i in range(len(dataset))]
+    if care_rot:
+        indices = [i for i in range(len(dataset))
+                   if object_types[i] == Params.CARE_ROT_IDX]
+    else:
+        indices = [i for i in range(len(dataset))
+                   if object_types[i] == Params.IGNORE_ROT_IDX]
+    np.random.shuffle(indices)
+    num_batches = min(20, int(np.ceil(len(indices) / batch_size)))
+
+    total_loss = 0.0
+    for b in range(num_batches):
         batch_indices = indices[b * batch_size:(b + 1) * batch_size]
         batch_data = load_batch(dataset, batch_indices)
         batch_data_processed = process_batch_data(
             batch_data, train_rot=None, n_samples=None, is_full_traj=True)
         with torch.no_grad():
             loss, _ = adaptation_loss(policy.policy_network, batch_data_processed, dstep,
-                                      train_pos=calc_pos, train_rot=calc_rot,
+                                      train_pos=False, train_rot=True,
                                       goal_pos_radius_scale=1.0)
 
         total_loss += loss * len(batch_indices)
@@ -79,7 +126,8 @@ def eval_performance(policy: Policy, dataset, dstep, calc_pos, calc_rot):
 
 def run_evaluation():
     model_name = "policy_2D"
-    loaded_epoch = 70
+    loaded_epoch = 100
+    num_steps = 70
     dstep = Params.dstep_2D
 
     with open(os.path.join(Params.model_root, model_name, "train_args_pt_1.json"), "r") as f:
@@ -124,31 +172,77 @@ def run_evaluation():
     rot_offset_start = policy.policy_network.rot_offsets_train[Params.START_IDX].detach(
     )
 
-    # Position
-    num_steps = 100
+    # # Position
     pos_feats_linspace = torch.linspace(
-        pos_attract_feat.item() - 0.5, pos_repel_feat.item() + 0.5, num_steps).to(DEVICE)
+        pos_attract_feat.item() - 0.5, pos_repel_feat.item() + 0.5, num_steps).to(DEVICE).view(-1, 1)
 
     param_loss_data = [[None] * num_steps for _ in range(num_steps)]
     pbar = tqdm(total=num_steps * num_steps)
     for i in range(num_steps):
         for j in range(num_steps):
             # Reset the attract and repel features separately
-            obj_pos_feats = [pos_feats_linspace[i].view(
-                1), pos_feats_linspace[j].view(1)]
+            obj_pos_feats = [pos_feats_linspace[i],
+                             pos_feats_linspace[j]]  # Repel, Attract objs
             obj_rot_feats = [rot_care_feat] * 2
             obj_rot_offsets = [rot_offset_start] * 2  # alias fine, pure eval
             policy.update_obj_feats(
                 obj_pos_feats, obj_rot_feats, obj_rot_offsets, same_var=False)
 
-            pos_loss = eval_performance(policy=policy, dataset=pos_dataset,
-                                        dstep=dstep, calc_pos=True, calc_rot=False)
+            pos_loss = eval_performance_pos(policy=policy, dataset=pos_dataset,
+                                            dstep=dstep, use_dot_prod=True)
             param_loss_data[i][j] = (
                 pos_feats_linspace[i].item(), pos_feats_linspace[j].item(), pos_loss.item())
             pbar.update(1)
 
-    np.save("param_loss_data_pos.npy", param_loss_data)
+    np.save("param_loss_data_pos_dot_prod.npy", param_loss_data)
+
+    # Rotation
+    # rot_feats_linspace = torch.linspace(
+    #     rot_ignore_feat.item() - 0.5, rot_care_feat.item() + 0.5, num_steps).to(DEVICE).view(-1, 1)
+    # rot_offsets_linspace = torch.linspace(
+    #     0, 3 * np.pi / 2, num_steps).to(DEVICE).view(-1, 1)
+
+    # param_loss_data = [[None] * num_steps for _ in range(num_steps)]
+    # # pbar = tqdm(total=num_steps * num_steps)
+    # for i in range(num_steps):
+    #     for j in range(num_steps):
+    #         # Reset the attract and repel features separately
+    #         obj_pos_feats = [pos_attract_feat]
+    #         obj_rot_feats = [rot_feats_linspace[i]]
+    #         # alias fine, pure eval
+    #         obj_rot_offsets = [rot_offsets_linspace[j]]
+    #         policy.update_obj_feats(
+    #             obj_pos_feats, obj_rot_feats, obj_rot_offsets, same_var=False)
+
+    #         rot_loss_care = eval_performance_rot(policy=policy, dataset=rot_dataset,
+    #                                              dstep=dstep,
+    #                                              care_rot=True)
+    #         rot_loss_ignore = eval_performance_rot(policy=policy, dataset=rot_dataset,
+    #                                                dstep=dstep,
+    #                                                care_rot=False)
+    #         param_loss_data[i][j] = (
+    #             rot_feats_linspace[i].item(), rot_offsets_linspace[j].item(), rot_loss_care.item(), rot_loss_ignore.item())
+    #         # pbar.update(1)
+
+    # np.save("param_loss_data_rot.npy", param_loss_data)
+
+
+def plot_evaluation():
+    loss_data_path = "param_loss_data_pos.npy"
+    data = np.load(loss_data_path)
+    y = np.array([data[i][0][0] for i in range(len(data))])
+    x = np.array([data[0][j][1] for j in range(len(data[0]))])
+    Z = [[None] * len(data) for _ in range(len(data))]
+    for i in range(len(data)):
+        for j in range(len(data[0])):
+            Z[i][j] = data[i][j][2]
+    Z = np.array(Z)
+
+    plot_2d_contour(x, y, Z, "pos_loss", vmin=0.1,
+                    vmax=10, vlevel=0.5, show=True,
+                    xlabel='Attract Feature', ylabel='Repel Feature')
 
 
 if __name__ == "__main__":
     run_evaluation()
+    # plot_evaluation()

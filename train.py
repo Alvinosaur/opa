@@ -300,7 +300,7 @@ def process_batch_data(batch_data, train_rot, n_samples, is_full_traj=False):
 def batch_inner_loop(model: PolicyNetwork, batch_data: List[Tuple],
                      is_3D: bool,
                      train_rot: bool,
-                     n_samples=8):
+                     n_samples=8, is_training=True):
     """
 
 
@@ -337,7 +337,7 @@ def batch_inner_loop(model: PolicyNetwork, batch_data: List[Tuple],
                                                 object_indices=obj_type_tensors,
                                                 calc_pos=not train_rot,
                                                 calc_rot=train_rot,
-                                                is_training=True)
+                                                is_training=is_training)
 
     pos_loss = torch.tensor([0.0], device=DEVICE)
     theta_loss = torch.tensor([0.0], device=DEVICE)

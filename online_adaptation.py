@@ -7,7 +7,7 @@ import torch
 from data_params import Params
 from model import Policy, PolicyNetwork, encode_ori_3D, encode_ori_2D, pose_to_model_input
 from recursive_least_squares.rls import RLS
-from train import process_batch_data, DEVICE
+from train import batch_inner_loop, process_batch_data, DEVICE
 
 
 def write_log(log_file, string):
@@ -100,7 +100,7 @@ def model_rollout(goal_tensors, current_inputs, start_tensors, goal_rot_inputs,
 
 def adaptation_loss(model: PolicyNetwork, batch_data_processed, dstep,
                     train_pos=True, train_rot=False,
-                    goal_pos_radius_scale=1.0):
+                    goal_pos_radius_scale=1.0, use_rollout=True, batch_data=None):
     """
     Calculates loss for online adaptation to human intervention.
     Unlike batch_inner_loop, which randomly samples timesteps from trajectory,
@@ -124,51 +124,62 @@ def adaptation_loss(model: PolicyNetwork, batch_data_processed, dstep,
     B, T = traj_tensors.shape[0:2]
     input_dim = traj_tensors.shape[-1]
     pos_dim = 3 if input_dim == 9 else 2
+    is_3D = pos_dim == 3
     out_T = T - 1
     agent_radii = torch.tensor(
         [Params.agent_radius], device=DEVICE).view(1, 1).repeat(B, 1)
 
     # Perform agent prediction rollout
-    pred_traj = model_rollout(goal_tensors=goal_tensors, current_inputs=current_inputs,
-                              start_tensors=start_tensors, goal_rot_inputs=goal_rot_inputs,
-                              object_inputs=object_inputs, obj_idx_tensors=obj_idx_tensors,
-                              intervention_traj=traj_tensors,
-                              model=model,
-                              agent_radii=agent_radii, out_T=out_T,
-                              goal_pos_radius_scale=goal_pos_radius_scale, dstep=dstep,
-                              train_pos=train_pos, train_rot=train_rot, pos_dim=pos_dim)
+    if use_rollout:
+        pred_traj = model_rollout(goal_tensors=goal_tensors, current_inputs=current_inputs,
+                                  start_tensors=start_tensors, goal_rot_inputs=goal_rot_inputs,
+                                  object_inputs=object_inputs, obj_idx_tensors=obj_idx_tensors,
+                                  intervention_traj=traj_tensors,
+                                  model=model,
+                                  agent_radii=agent_radii, out_T=out_T,
+                                  goal_pos_radius_scale=goal_pos_radius_scale, dstep=dstep,
+                                  train_pos=train_pos, train_rot=train_rot, pos_dim=pos_dim)
 
-    # Compute loss
-    loss = torch.tensor([0.0], device=DEVICE)
-    if train_pos:
-        # Upon post-analysis, we get more stable adaptation when using a different
-        # loss function at adaptation time for position:
-        # Calculate distance with each object for both human intervention and agent rollout
-        # and measure difference in object distances
-        gt_dists = torch.norm(traj_tensors[:, 1:, :pos_dim] -
-                              object_inputs[:, 1:, 0, :pos_dim], dim=-1, keepdim=True)
-        pred_dists = torch.norm(pred_traj[:, :, :pos_dim] -
-                                object_inputs[:, 1:, 0, :pos_dim], dim=-1, keepdim=True)
-        pos_loss = torch.abs(gt_dists - pred_dists).mean()
-        loss = loss + pos_loss
+        # Compute loss
+        loss = torch.tensor([0.0], device=DEVICE)
+        if train_pos:
+            # Upon post-analysis, we get more stable adaptation when using a different
+            # loss function at adaptation time for position:
+            # Calculate distance with each object for both human intervention and agent rollout
+            # and measure difference in object distances
+            gt_dists = torch.norm(traj_tensors[:, 1:, :pos_dim] -
+                                  object_inputs[:, 1:, 0, :pos_dim], dim=-1, keepdim=True)
+            pred_dists = torch.norm(pred_traj[:, :, :pos_dim] -
+                                    object_inputs[:, 1:, 0, :pos_dim], dim=-1, keepdim=True)
+            pos_loss = torch.abs(gt_dists - pred_dists).mean()
+            loss = loss + pos_loss
 
-    if train_rot:
-        output_ori = pred_traj[:, :out_T, pos_dim:]
-        target_ori = traj_tensors[:, :out_T, pos_dim:]
-        if pos_dim == 2:
-            theta_loss = (1 - torch.einsum("bik,bik->bi",
-                          output_ori, target_ori)).mean()
-        else:
-            output_x = output_ori[:, :, 0:3]
-            output_y = output_ori[:, :, 3:6]
-            tgt_x = target_ori[:, :, 0:3]
-            tgt_y = target_ori[:, :, 3:6]
-            theta_loss = ((1 - torch.einsum("bik,bik->bi",
-                          output_x, tgt_x)).mean() +
-                          (1 - torch.einsum("bik,bik->bi",
-                                            output_y, tgt_y)).mean())
+        if train_rot:
+            output_ori = pred_traj[:, :out_T, pos_dim:]
+            target_ori = traj_tensors[:, :out_T, pos_dim:]
+            if pos_dim == 2:
+                theta_loss = (1 - torch.einsum("bik,bik->bi",
+                                               output_ori, target_ori)).mean()
+            else:
+                output_x = output_ori[:, :, 0:3]
+                output_y = output_ori[:, :, 3:6]
+                tgt_x = target_ori[:, :, 0:3]
+                tgt_y = target_ori[:, :, 3:6]
+                theta_loss = ((1 - torch.einsum("bik,bik->bi",
+                                                output_x, tgt_x)).mean() +
+                              (1 - torch.einsum("bik,bik->bi",
+                                                output_y, tgt_y)).mean())
 
-        loss = loss + theta_loss
+            loss = loss + theta_loss
+    else:
+        assert batch_data is not None
+        pred_traj = None
+        n_samples = 64
+        pos_loss, rot_loss = batch_inner_loop(model, batch_data,
+                                              is_3D=is_3D,
+                                              train_rot=train_rot,
+                                              n_samples=n_samples, is_training=False)
+        loss = pos_loss + rot_loss  # 0 by default if train_rot/pos is False
 
     return loss, pred_traj
 
