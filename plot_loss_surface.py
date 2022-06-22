@@ -109,7 +109,7 @@ def eval_performance_rot(policy: Policy, dataset, dstep, care_rot):
         indices = [i for i in range(len(dataset))
                    if object_types[i] == Params.IGNORE_ROT_IDX]
     np.random.shuffle(indices)
-    num_batches = min(20, int(np.ceil(len(indices) / batch_size)))
+    num_batches = min(10, int(np.ceil(len(indices) / batch_size)))
 
     total_loss = 0.0
     for b in range(num_batches):
@@ -118,49 +118,49 @@ def eval_performance_rot(policy: Policy, dataset, dstep, care_rot):
         batch_data_processed = process_batch_data(
             batch_data, train_rot=None, n_samples=None, is_full_traj=True)
         with torch.no_grad():
-            loss, pred_traj = adaptation_loss(policy.policy_network, batch_data_processed, dstep,
+            loss, pred_traj = adaptation_loss(policy.policy_network,
+                                              batch_data_processed, dstep,
                                               train_pos=False, train_rot=True,
                                               goal_pos_radius_scale=1.0)
 
-            (start_tensors, current_inputs, goal_tensors, goal_rot_inputs, object_inputs, obj_idx_tensors, _, _,
-             traj_tensors) = batch_data_processed
+            # (start_tensors, current_inputs, goal_tensors, goal_rot_inputs, object_inputs, obj_idx_tensors, _, _,
+            #  traj_tensors) = batch_data_processed
 
-            import ipdb
-            ipdb.set_trace()
-            start = start_tensors.cpu().numpy()[0]
-            start = np.concatenate(
-                [start[:2], decode_ori(start[2:]).flatten()])
-            current = current_inputs.cpu().numpy()[0]
-            goal = goal_tensors.cpu().numpy()[0]
-            goal = np.concatenate(
-                [goal[:2], decode_ori(goal[2:]).flatten()])
-            object_types = obj_idx_tensors.cpu().numpy()[0]
-            pred_traj = np.hstack([
-                pred_traj.cpu().numpy()[0, :, :2],
-                decode_ori(pred_traj.cpu().numpy()[0, :, 2:])
-            ])
-            expert_traj = np.hstack([
-                traj_tensors.cpu().numpy()[0, :, :2],
-                decode_ori(traj_tensors.cpu().numpy()[0, :, 2:])
-            ])
+            # start = start_tensors.cpu().numpy()[0]
+            # start = np.concatenate(
+            #     [start[:2], decode_ori(start[2:]).flatten()])
+            # current = current_inputs.cpu().numpy()[0]
+            # goal = goal_tensors.cpu().numpy()[0]
+            # goal = np.concatenate(
+            #     [goal[:2], decode_ori(goal[2:]).flatten()])
+            # object_types = obj_idx_tensors.cpu().numpy()[0]
+            # pred_traj = np.hstack([
+            #     pred_traj.cpu().numpy()[0, :, :2],
+            #     decode_ori(pred_traj.cpu().numpy()[0, :, 2:])
+            # ])
+            # expert_traj = np.hstack([
+            #     traj_tensors.cpu().numpy()[0, :, :2],
+            #     decode_ori(traj_tensors.cpu().numpy()[0, :, 2:])
+            # ])
 
-            import ipdb
-            ipdb.set_trace()
+            # object_poses = object_inputs[0, 0, :, :4].cpu().numpy()
+            # object_poses = np.hstack([object_poses[:, :2],
+            #                           decode_ori(object_poses[:, 2:])])
+            # object_radii = object_inputs[0, 0, :, -1].cpu().numpy()
+            # theta_offsets = Params.ori_offsets_2D[object_types]
+            # objects = [
+            #     Object(pos=object_poses[i][0:2], radius=object_radii[i],
+            #            ori=object_poses[i][-1] + theta_offsets[i]) for i in range(len(object_types))
+            # ]
 
-            object_poses = object_inputs[0, 0, :, :4].cpu().numpy()
-            object_radii = object_inputs[0, 0, :, -1].cpu().numpy()
-            theta_offsets = Params.ori_offsets_2D[object_types]
-            objects = [
-                Object(pos=object_poses[i][0:2], radius=object_radii[i],
-                       ori=object_poses[i][-1] + theta_offsets[i]) for i in range(len(object_types))
-            ]
+            # fig, ax = plt.subplots(1, 1, figsize=(10, 10))
+            # draw(ax, start_pose=start, goal_pose=goal,
+            #      goal_radius=Params.agent_radius, agent_radius=Params.agent_radius,
+            #      object_types=object_types, offset_objects=objects,
+            #      pred_traj=pred_traj, expert_traj=expert_traj,
+            #      title="test", show_rot=True, hold=True)
 
-            fig, ax = plt.subplots(1, 1, figsize=(10, 10))
-            draw(ax, start_pose=start, goal_pose=goal,
-                 goal_radius=Params.agent_radius, agent_radius=Params.agent_radius,
-                 object_types=object_types, offset_objects=objects,
-                 pred_traj=pred_traj, expert_traj=expert_traj,
-                 title=f"test", show_rot=True, hold=True)
+            # break
 
         total_loss += loss * len(batch_indices)
 
@@ -170,7 +170,7 @@ def eval_performance_rot(policy: Policy, dataset, dstep, care_rot):
 def run_evaluation():
     model_name = "policy_2D"
     loaded_epoch = 100
-    num_steps = 70
+    num_steps = 20
     dstep = Params.dstep_2D
 
     with open(os.path.join(Params.model_root, model_name, "train_args_pt_1.json"), "r") as f:
@@ -217,7 +217,9 @@ def run_evaluation():
 
     # # Position
     # pos_feats_linspace = torch.linspace(
-    #     pos_attract_feat.item() - 0.5, pos_repel_feat.item() + 0.5, num_steps).to(DEVICE).view(-1, 1)
+    #     torch.min(pos_repel_feat, pos_attract_feat).item() - 0.5,
+    #     torch.max(pos_repel_feat, pos_attract_feat).item() + 0.5,
+    #     num_steps).to(DEVICE).view(-1, 1)
 
     # param_loss_data = [[None] * num_steps for _ in range(num_steps)]
     # pbar = tqdm(total=num_steps * num_steps)
@@ -240,27 +242,24 @@ def run_evaluation():
     # np.save("param_loss_data_pos_dot_prod.npy", param_loss_data)
 
     # Rotation
-    print(rot_ignore_feat, rot_care_feat)
-    num_steps = 2
     rot_feats_linspace = torch.linspace(
-        rot_ignore_feat.item(), rot_care_feat.item(), num_steps).to(DEVICE).view(-1, 1)
+        torch.min(rot_ignore_feat, rot_care_feat).item() - 0.5,
+        torch.max(rot_ignore_feat, rot_care_feat).item() + 0.5,
+        num_steps).to(DEVICE).view(-1, 1)
     rot_offsets_linspace = torch.linspace(
         0, 3 * np.pi / 2, num_steps).to(DEVICE).view(-1, 1)
 
     param_loss_data = [[None] * num_steps for _ in range(num_steps)]
-    # pbar = tqdm(total=num_steps * num_steps)
+    pbar = tqdm(total=num_steps * num_steps)
     for i in range(num_steps):
         for j in range(num_steps):
-            # Reset the attract and repel features separately
-            obj_pos_feats = [pos_attract_feat]
-            obj_rot_feats = [rot_feats_linspace[i]]
-            # alias fine, pure eval
-            # obj_rot_offsets = [rot_offsets_linspace[j]]
-            obj_rot_offsets = [torch.tensor(np.pi / 2).view(-1, 1).to(DEVICE)]
+            # Reset the attract and repel features separately, only 1 object present in a scene, so can simply duplicate features for both care and ignore
+            obj_pos_feats = [pos_attract_feat] * 2
+            obj_rot_feats = [rot_feats_linspace[i]] * 2
+            obj_rot_offsets = [rot_offsets_linspace[j]] * 2
             policy.update_obj_feats(
                 obj_pos_feats, obj_rot_feats, obj_rot_offsets, same_var=False)
 
-            print(obj_rot_feats, obj_rot_offsets)
             rot_loss_care = eval_performance_rot(policy=policy, dataset=rot_dataset,
                                                  dstep=dstep,
                                                  care_rot=True)
@@ -269,7 +268,7 @@ def run_evaluation():
                                                    care_rot=False)
             param_loss_data[i][j] = (
                 rot_feats_linspace[i].item(), rot_offsets_linspace[j].item(), rot_loss_care.item(), rot_loss_ignore.item())
-            # pbar.update(1)
+            pbar.update(1)
 
     np.save("param_loss_data_rot.npy", param_loss_data)
 

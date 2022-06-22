@@ -83,14 +83,18 @@ def sample_starts_tgts(traj: np.ndarray, goals_r: np.ndarray,
     """
     # Ensure data types are correct
     traj = traj.astype(np.float32)
-    goals_r = goals_r.astype(np.float32)
+    if isinstance(goals_r, np.ndarray):
+        goals_r = goals_r.astype(np.float32)
+    else:
+        goals_r = np.array([goals_r])
     objs = objs.astype(np.float32)
     objs_r = objs_r.astype(np.float32)
     obj_idxs = obj_idxs.astype(int)
 
     # prediction horizon is 1 timestep
-    pred_horizon_rep = np.full(shape=(n_samples, 1), fill_value=1)
     T = traj.shape[0]
+    n_samples = min(T, n_samples)
+    pred_horizon_rep = np.full(shape=(n_samples, 1), fill_value=1)
 
     assert traj.shape[1] in [3, 7]
     is_3D = traj.shape[1] == 3 + 4  # x, y, z, qw, qx, qy, qz
@@ -108,7 +112,6 @@ def sample_starts_tgts(traj: np.ndarray, goals_r: np.ndarray,
         #   this is important because most timesteps have zero change, which
         #   can cause model to simply collapse to predicting zero change always.
         nonzero_prop = 0.4
-        n_samples = min(T, n_samples)
         n_nonzero = int(nonzero_prop * n_samples)
         n_zero = n_samples - n_nonzero
         nonzero_samples = np.random.choice(nonzero_indices, size=n_nonzero)
@@ -300,7 +303,7 @@ def process_batch_data(batch_data, train_rot, n_samples, is_full_traj=False):
 def batch_inner_loop(model: PolicyNetwork, batch_data: List[Tuple],
                      is_3D: bool,
                      train_rot: bool,
-                     n_samples=8, is_training=True):
+                     n_samples=8, is_training=True, is_full_traj=False):
     """
 
 
@@ -317,7 +320,7 @@ def batch_inner_loop(model: PolicyNetwork, batch_data: List[Tuple],
      goal_tensors, goal_rot_inputs,
      object_inputs, obj_type_tensors,
      all_tgt_ori_tensors, all_tgt_trans_tensors, _) = process_batch_data(batch_data, n_samples=n_samples,
-                                                                         train_rot=train_rot)
+                                                                         train_rot=train_rot, is_full_traj=is_full_traj)
 
     # Start for model's rotational relation network
     start_rot_radii = torch.norm(

@@ -197,7 +197,7 @@ def draw(ax: plt.Axes, start_pose: np.ndarray, goal_pose: np.ndarray,
     else:
         if hold:
             plt.pause(2.0)  # Give enough time to plot before ipdb
-            # ipdb.set_trace()
+            ipdb.set_trace()
         else:
             plt.pause(DRAW_DURATION)
 
@@ -427,11 +427,17 @@ def viz_adaptation(policy: Policy, num_updates, test_data_root: str, train_pos, 
         object_idxs = np.arange(num_objects)
 
         # (traj, goals_r, objs, objs_r, obj_idxs)
-        batch_data = (expert_traj, goal_radius,
+        # batch_data = (expert_traj, goal_radius,
+        #               # repeat for T timesteps unless object can move
+        #               object_poses[np.newaxis, :, :].repeat(T, axis=0),
+        #               object_radii[np.newaxis, :, np.newaxis].repeat(
+        #                   T, axis=0),  # repeat for T timesteps
+        #               object_idxs)
+
+        batch_data = (expert_traj, np.array([goal_radius]),
                       # repeat for T timesteps unless object can move
-                      object_poses[np.newaxis, :, :].repeat(T, axis=0),
-                      object_radii[np.newaxis, :, np.newaxis].repeat(
-                          T, axis=0),  # repeat for T timesteps
+                      object_poses,
+                      object_radii[..., np.newaxis],
                       object_idxs)
 
         objects = [
@@ -445,7 +451,7 @@ def viz_adaptation(policy: Policy, num_updates, test_data_root: str, train_pos, 
         rot_obj_types = [None] * num_objects  # None means no rot preference
         rot_requires_grad = [train_rot] * num_objects
         policy.init_new_objs(pos_obj_types=pos_obj_types, rot_obj_types=rot_obj_types,
-                             pos_requires_grad=pos_requires_grad, rot_requires_grad=rot_requires_grad, use_rand_init=True)
+                             pos_requires_grad=pos_requires_grad, rot_requires_grad=rot_requires_grad, use_rand_init=False)
 
         # Observe model performance after various number of update steps
         total_updates = max(num_updates_series) + 1
@@ -555,10 +561,10 @@ if __name__ == '__main__':
                 rls=rls, *args, **kwargs)
         elif args.use_learn2learn:
             print("Using Learn2Learn to adapt object features.")
-            save_res_dir = f"eval_adaptation_results/learn2learn_group_rand_init"
+            save_res_dir = f"eval_adaptation_results/learn2learn_group_train_dot_prod_eval_L2"
             learned_opts = LearnedOptimizerGroup(
                 pos_opt_path=os.path.join(
-                    Params.model_root, "learned_opt_pos_20_unroll_3"),
+                    Params.model_root, "learned_opt_pos_pref_rand_init_20_unroll_3_redo2_dot_prod"),
                 rot_opt_path=os.path.join(
                     Params.model_root, "learned_opt_rot_pref_rand_init_30_unroll_2"),
                 rot_offset_opt_path=os.path.join(
@@ -566,7 +572,8 @@ if __name__ == '__main__':
                 device=DEVICE,
                 pos_epoch=3, rot_epoch=4, rot_offset_epoch=3)
             adaptation_func = lambda *args, **kwargs: perform_adaptation_learn2learn_group(
-                learned_opts=learned_opts, *args, **kwargs)
+                learned_opts=learned_opts, is_3D=train_args["is_3D"],
+                *args, **kwargs)
 
             # learned_opt = LearnedOptimizer(device=DEVICE, max_steps=2)
             # learned_opt.to(DEVICE)

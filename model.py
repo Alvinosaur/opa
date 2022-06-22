@@ -420,6 +420,9 @@ class PolicyNetwork(nn.Module):
             rot_pref_feat_rep = self.rot_pref_feat_train[feat_idxs]
             rot_offsets_rep = self.rot_offsets_train[feat_idxs]
         else:
+            # -2 for start/goal, avoid possibility where wrong number of obj feats are present, but no error is raised because obj idxs overflow into start/goal value (ex: obj_idx=1, requiring at least 2 obj feats)
+            assert object_indices.max() < len(self.rot_pref_feat_test) - \
+                2, "Invalid object index or not enough obj feats"
             rot_pref_feat_rep = torch.cat([
                 torch.stack([self.rot_pref_feat_test[obj_i]
                             for obj_i in feat_idxs[b]]).unsqueeze(0)
@@ -430,6 +433,7 @@ class PolicyNetwork(nn.Module):
                             for obj_i in feat_idxs[b]]).unsqueeze(0)
                 for b in range(B)
             ], dim=0)
+            # print(rot_pref_feat_rep)
 
         # Apply learned rotation offset to object orientations
         input_rot_effects = self.apply_rot_offset(
@@ -494,6 +498,8 @@ class PolicyNetwork(nn.Module):
         if is_training:
             pos_pref_feat_rep = self.pos_pref_feat_train[feat_idxs]
         else:
+            assert object_indices.max() < len(self.pos_pref_feat_test) - \
+                1, "Invalid object index or not enough obj feats"
             pos_pref_feat_rep = torch.cat([
                 torch.stack([self.pos_pref_feat_test[obj_i]
                             for obj_i in feat_idxs[b]]).unsqueeze(0)

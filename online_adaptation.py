@@ -361,6 +361,7 @@ def perform_adaptation_rls(policy: Policy, rls: RLS, batch_data: List[Tuple],
 def perform_adaptation_learn2learn(policy: Policy, learned_opt, batch_data: List[Tuple],
                                    train_pos: bool, train_rot: bool,
                                    n_adapt_iters: int, dstep: float,
+                                   is_3D,
                                    verbose=False, clip_params=True,
                                    ret_trajs=False,
                                    reset_lstm=True, log_file=None):
@@ -390,10 +391,16 @@ def perform_adaptation_learn2learn(policy: Policy, learned_opt, batch_data: List
         return [loss.item()], [pred_traj.detach().cpu().numpy()]
 
     for iteration in range(n_adapt_iters):
-        loss, pred_traj = adaptation_loss(model=policy.policy_network,
-                                          batch_data_processed=batch_data_processed,
-                                          train_pos=train_pos, train_rot=train_rot,
-                                          dstep=dstep)
+        # loss, pred_traj = adaptation_loss(model=policy.policy_network,
+        #                                   batch_data_processed=batch_data_processed,
+        #                                   train_pos=train_pos, train_rot=train_rot,
+        #                                   dstep=dstep)
+
+        pred_traj = None
+        n_samples = 64
+        pos_loss, rot_loss = batch_inner_loop(model=policy.policy_network,
+                                              batch_data=batch_data, train_rot=train_rot, is_3D=is_3D, n_samples=n_samples, is_training=False)
+        loss = pos_loss + rot_loss
 
         is_final = iteration == n_adapt_iters - 1
         new_params, need_reset = learned_opt.step(
@@ -425,7 +432,7 @@ def perform_adaptation_learn2learn(policy: Policy, learned_opt, batch_data: List
 
 def perform_adaptation_learn2learn_group(policy: Policy, learned_opts, batch_data: List[Tuple],
                                          train_pos: bool, train_rot: bool,
-                                         n_adapt_iters: int, dstep: float,
+                                         n_adapt_iters: int, dstep: float, is_3D,
                                          verbose=False, clip_params=True,
                                          ret_trajs=False,
                                          reset_lstm=True, log_file=None):
@@ -461,10 +468,16 @@ def perform_adaptation_learn2learn_group(policy: Policy, learned_opts, batch_dat
         return [loss.item()], [pred_traj.detach().cpu().numpy()]
 
     for iteration in range(n_adapt_iters):
+        # with torch.no_grad():
         loss, pred_traj = adaptation_loss(model=policy.policy_network,
                                           batch_data_processed=batch_data_processed,
                                           train_pos=train_pos, train_rot=train_rot,
                                           dstep=dstep)
+
+        # n_samples = np.Inf  # use all timesteps of traj
+        # pos_loss, rot_loss = batch_inner_loop(model=policy.policy_network,
+        #                                       batch_data=batch_data, train_rot=train_rot, is_3D=is_3D, n_samples=n_samples, is_training=False)
+        # loss = pos_loss + rot_loss
 
         new_params, need_reset = learned_opts.step(
             loss, params, verbose=verbose, param_types=param_types, log_file=log_file)
