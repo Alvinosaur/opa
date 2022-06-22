@@ -32,25 +32,25 @@ def plot_2d_contour(x, y, Z, title, vmin=0.1, vmax=10, vlevel=0.5, show=False,
         print('The length of coordinates is not enough for plotting contours')
         return
 
-    # --------------------------------------------------------------------
-    # Plot 2D contours
-    # --------------------------------------------------------------------
-    fig = plt.figure()
-    CS = plt.contour(X, Y, Z, cmap='summer',
-                     levels=np.arange(vmin, vmax, vlevel))
-    plt.xlabel(xlabel)
-    plt.ylabel(ylabel)
-    plt.clabel(CS, inline=1, fontsize=8)
-    fig.savefig(title + '_contour.jpg', dpi=300, bbox_inches='tight')
+    # # --------------------------------------------------------------------
+    # # Plot 2D contours
+    # # --------------------------------------------------------------------
+    # fig = plt.figure()
+    # CS = plt.contour(X, Y, Z, cmap='summer',
+    #                  levels=np.arange(vmin, vmax, vlevel))
+    # plt.xlabel(xlabel)
+    # plt.ylabel(ylabel)
+    # plt.clabel(CS, inline=1, fontsize=8)
+    # fig.savefig(title + '_contour.jpg', dpi=300, bbox_inches='tight')
 
-    # --------------------------------------------------------------------
-    # Plot 2D heatmaps
-    # --------------------------------------------------------------------
-    fig = plt.figure()
-    sns_plot = sns.heatmap(Z, cmap='viridis', cbar=True, vmin=vmin, vmax=vmax,
-                           xticklabels=False, yticklabels=False)
-    sns_plot.invert_yaxis()
-    sns_plot.get_figure().savefig(title + '_2dheat.jpg', dpi=300, bbox_inches='tight')
+    # # --------------------------------------------------------------------
+    # # Plot 2D heatmaps
+    # # --------------------------------------------------------------------
+    # fig = plt.figure()
+    # sns_plot = sns.heatmap(Z, cmap='viridis', cbar=True, vmin=vmin, vmax=vmax,
+    #                        xticklabels=False, yticklabels=False)
+    # sns_plot.invert_yaxis()
+    # sns_plot.get_figure().savefig(title + '_2dheat.jpg', dpi=300, bbox_inches='tight')
 
     # --------------------------------------------------------------------
     # Plot 3D surface
@@ -61,6 +61,8 @@ def plot_2d_contour(x, y, Z, title, vmin=0.1, vmax=10, vlevel=0.5, show=False,
                            linewidth=0, antialiased=False)
     plt.xlabel(xlabel)
     plt.ylabel(ylabel)
+    ax.set_zlabel('loss')
+    plt.title(title)
     fig.colorbar(surf, shrink=0.5, aspect=5)
 
     for i, ang in enumerate(range(0, 360, 45)):

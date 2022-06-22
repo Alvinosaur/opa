@@ -1,3 +1,4 @@
+from socket import IP_DROP_MEMBERSHIP
 from typing import *
 import numpy as np
 import matplotlib.pyplot as plt
@@ -8,11 +9,13 @@ import json
 import torch
 
 from data_params import Params
-from model import Policy, PolicyNetwork
+from model import Policy, PolicyNetwork, decode_ori
 from train import load_batch, process_batch_data, batch_inner_loop, DEVICE
 from online_adaptation import adaptation_loss
 from loss_plot_helpers import plot_2d_contour
 from dataset import Dataset
+from viz_2D import draw
+from elastic_band import Object
 
 
 def evaluate_helper(policy: Policy, adaptation_func, batch_data, train_pos, train_rot, n_adapt_iters, dstep, log_file):
@@ -115,9 +118,49 @@ def eval_performance_rot(policy: Policy, dataset, dstep, care_rot):
         batch_data_processed = process_batch_data(
             batch_data, train_rot=None, n_samples=None, is_full_traj=True)
         with torch.no_grad():
-            loss, _ = adaptation_loss(policy.policy_network, batch_data_processed, dstep,
-                                      train_pos=False, train_rot=True,
-                                      goal_pos_radius_scale=1.0)
+            loss, pred_traj = adaptation_loss(policy.policy_network, batch_data_processed, dstep,
+                                              train_pos=False, train_rot=True,
+                                              goal_pos_radius_scale=1.0)
+
+            (start_tensors, current_inputs, goal_tensors, goal_rot_inputs, object_inputs, obj_idx_tensors, _, _,
+             traj_tensors) = batch_data_processed
+
+            import ipdb
+            ipdb.set_trace()
+            start = start_tensors.cpu().numpy()[0]
+            start = np.concatenate(
+                [start[:2], decode_ori(start[2:]).flatten()])
+            current = current_inputs.cpu().numpy()[0]
+            goal = goal_tensors.cpu().numpy()[0]
+            goal = np.concatenate(
+                [goal[:2], decode_ori(goal[2:]).flatten()])
+            object_types = obj_idx_tensors.cpu().numpy()[0]
+            pred_traj = np.hstack([
+                pred_traj.cpu().numpy()[0, :, :2],
+                decode_ori(pred_traj.cpu().numpy()[0, :, 2:])
+            ])
+            expert_traj = np.hstack([
+                traj_tensors.cpu().numpy()[0, :, :2],
+                decode_ori(traj_tensors.cpu().numpy()[0, :, 2:])
+            ])
+
+            import ipdb
+            ipdb.set_trace()
+
+            object_poses = object_inputs[0, 0, :, :4].cpu().numpy()
+            object_radii = object_inputs[0, 0, :, -1].cpu().numpy()
+            theta_offsets = Params.ori_offsets_2D[object_types]
+            objects = [
+                Object(pos=object_poses[i][0:2], radius=object_radii[i],
+                       ori=object_poses[i][-1] + theta_offsets[i]) for i in range(len(object_types))
+            ]
+
+            fig, ax = plt.subplots(1, 1, figsize=(10, 10))
+            draw(ax, start_pose=start, goal_pose=goal,
+                 goal_radius=Params.agent_radius, agent_radius=Params.agent_radius,
+                 object_types=object_types, offset_objects=objects,
+                 pred_traj=pred_traj, expert_traj=expert_traj,
+                 title=f"test", show_rot=True, hold=True)
 
         total_loss += loss * len(batch_indices)
 
@@ -173,74 +216,104 @@ def run_evaluation():
     )
 
     # # Position
-    pos_feats_linspace = torch.linspace(
-        pos_attract_feat.item() - 0.5, pos_repel_feat.item() + 0.5, num_steps).to(DEVICE).view(-1, 1)
-
-    param_loss_data = [[None] * num_steps for _ in range(num_steps)]
-    pbar = tqdm(total=num_steps * num_steps)
-    for i in range(num_steps):
-        for j in range(num_steps):
-            # Reset the attract and repel features separately
-            obj_pos_feats = [pos_feats_linspace[i],
-                             pos_feats_linspace[j]]  # Repel, Attract objs
-            obj_rot_feats = [rot_care_feat] * 2
-            obj_rot_offsets = [rot_offset_start] * 2  # alias fine, pure eval
-            policy.update_obj_feats(
-                obj_pos_feats, obj_rot_feats, obj_rot_offsets, same_var=False)
-
-            pos_loss = eval_performance_pos(policy=policy, dataset=pos_dataset,
-                                            dstep=dstep, use_dot_prod=True)
-            param_loss_data[i][j] = (
-                pos_feats_linspace[i].item(), pos_feats_linspace[j].item(), pos_loss.item())
-            pbar.update(1)
-
-    np.save("param_loss_data_pos_dot_prod.npy", param_loss_data)
-
-    # Rotation
-    # rot_feats_linspace = torch.linspace(
-    #     rot_ignore_feat.item() - 0.5, rot_care_feat.item() + 0.5, num_steps).to(DEVICE).view(-1, 1)
-    # rot_offsets_linspace = torch.linspace(
-    #     0, 3 * np.pi / 2, num_steps).to(DEVICE).view(-1, 1)
+    # pos_feats_linspace = torch.linspace(
+    #     pos_attract_feat.item() - 0.5, pos_repel_feat.item() + 0.5, num_steps).to(DEVICE).view(-1, 1)
 
     # param_loss_data = [[None] * num_steps for _ in range(num_steps)]
-    # # pbar = tqdm(total=num_steps * num_steps)
+    # pbar = tqdm(total=num_steps * num_steps)
     # for i in range(num_steps):
     #     for j in range(num_steps):
     #         # Reset the attract and repel features separately
-    #         obj_pos_feats = [pos_attract_feat]
-    #         obj_rot_feats = [rot_feats_linspace[i]]
-    #         # alias fine, pure eval
-    #         obj_rot_offsets = [rot_offsets_linspace[j]]
+    #         obj_pos_feats = [pos_feats_linspace[i],
+    #                          pos_feats_linspace[j]]  # Repel, Attract objs
+    #         obj_rot_feats = [rot_care_feat] * 2
+    #         obj_rot_offsets = [rot_offset_start] * 2  # alias fine, pure eval
     #         policy.update_obj_feats(
     #             obj_pos_feats, obj_rot_feats, obj_rot_offsets, same_var=False)
 
-    #         rot_loss_care = eval_performance_rot(policy=policy, dataset=rot_dataset,
-    #                                              dstep=dstep,
-    #                                              care_rot=True)
-    #         rot_loss_ignore = eval_performance_rot(policy=policy, dataset=rot_dataset,
-    #                                                dstep=dstep,
-    #                                                care_rot=False)
+    #         pos_loss = eval_performance_pos(policy=policy, dataset=pos_dataset,
+    #                                         dstep=dstep, use_dot_prod=True)
     #         param_loss_data[i][j] = (
-    #             rot_feats_linspace[i].item(), rot_offsets_linspace[j].item(), rot_loss_care.item(), rot_loss_ignore.item())
-    #         # pbar.update(1)
+    #             pos_feats_linspace[i].item(), pos_feats_linspace[j].item(), pos_loss.item())
+    #         pbar.update(1)
 
-    # np.save("param_loss_data_rot.npy", param_loss_data)
+    # np.save("param_loss_data_pos_dot_prod.npy", param_loss_data)
+
+    # Rotation
+    print(rot_ignore_feat, rot_care_feat)
+    num_steps = 2
+    rot_feats_linspace = torch.linspace(
+        rot_ignore_feat.item(), rot_care_feat.item(), num_steps).to(DEVICE).view(-1, 1)
+    rot_offsets_linspace = torch.linspace(
+        0, 3 * np.pi / 2, num_steps).to(DEVICE).view(-1, 1)
+
+    param_loss_data = [[None] * num_steps for _ in range(num_steps)]
+    # pbar = tqdm(total=num_steps * num_steps)
+    for i in range(num_steps):
+        for j in range(num_steps):
+            # Reset the attract and repel features separately
+            obj_pos_feats = [pos_attract_feat]
+            obj_rot_feats = [rot_feats_linspace[i]]
+            # alias fine, pure eval
+            # obj_rot_offsets = [rot_offsets_linspace[j]]
+            obj_rot_offsets = [torch.tensor(np.pi / 2).view(-1, 1).to(DEVICE)]
+            policy.update_obj_feats(
+                obj_pos_feats, obj_rot_feats, obj_rot_offsets, same_var=False)
+
+            print(obj_rot_feats, obj_rot_offsets)
+            rot_loss_care = eval_performance_rot(policy=policy, dataset=rot_dataset,
+                                                 dstep=dstep,
+                                                 care_rot=True)
+            rot_loss_ignore = eval_performance_rot(policy=policy, dataset=rot_dataset,
+                                                   dstep=dstep,
+                                                   care_rot=False)
+            param_loss_data[i][j] = (
+                rot_feats_linspace[i].item(), rot_offsets_linspace[j].item(), rot_loss_care.item(), rot_loss_ignore.item())
+            # pbar.update(1)
+
+    np.save("param_loss_data_rot.npy", param_loss_data)
 
 
 def plot_evaluation():
-    loss_data_path = "param_loss_data_pos.npy"
+    # # Position
+    # loss_data_path = "param_loss_data_pos_cos_sim.npy"
+    # data = np.load(loss_data_path)
+    # y = np.array([data[i][0][0] for i in range(len(data))])  # repel
+    # x = np.array([data[0][j][1] for j in range(len(data[0]))])   # attract
+    # Z = [[None] * len(data) for _ in range(len(data))]
+    # for i in range(len(data)):
+    #     for j in range(len(data[0])):
+    #         Z[i][j] = data[i][j][2]
+    # Z = np.array(Z)
+
+    # plot_2d_contour(x, y, Z, "pos_loss_cos_sim", vmin=0.1,
+    #                 vmax=10, vlevel=0.5, show=True,
+    #                 xlabel='Attract Feature', ylabel='Repel Feature')
+
+    # Rotation
+    loss_data_path = "param_loss_data_rot.npy"
     data = np.load(loss_data_path)
-    y = np.array([data[i][0][0] for i in range(len(data))])
-    x = np.array([data[0][j][1] for j in range(len(data[0]))])
-    Z = [[None] * len(data) for _ in range(len(data))]
+    y = np.array([data[i][0][0] for i in range(len(data))])  # rot feat
+    x = np.array([data[0][j][1] for j in range(len(data[0]))])  # rot offset
+    rot_loss_care = [[None] * len(data) for _ in range(len(data))]
+    rot_loss_ignore = [[None] * len(data) for _ in range(len(data))]
     for i in range(len(data)):
         for j in range(len(data[0])):
-            Z[i][j] = data[i][j][2]
-    Z = np.array(Z)
+            rot_loss_care[i][j] = data[i][j][2]
+            rot_loss_ignore[i][j] = data[i][j][3]
+    rot_loss_care = np.array(rot_loss_care)
+    rot_loss_ignore = np.array(rot_loss_ignore)
 
-    plot_2d_contour(x, y, Z, "pos_loss", vmin=0.1,
+    import ipdb
+    ipdb.set_trace()
+
+    plot_2d_contour(x, y, rot_loss_care, "rot_loss_care", vmin=0.1,
                     vmax=10, vlevel=0.5, show=True,
-                    xlabel='Attract Feature', ylabel='Repel Feature')
+                    xlabel='Rot Pref', ylabel='Rot Offset')
+
+    plot_2d_contour(x, y, rot_loss_ignore, "rot_loss_ignore", vmin=0.1,
+                    vmax=10, vlevel=0.5, show=True,
+                    xlabel='Rot Pref', ylabel='Rot Offset')
 
 
 if __name__ == "__main__":
