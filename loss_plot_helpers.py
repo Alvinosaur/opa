@@ -26,7 +26,6 @@ def plot_2d_contour(x, y, Z, title, vmin=0.1, vmax=10, vlevel=0.5, show=False,
     print('len(xcoordinates): %d   len(ycoordinates): %d' % (len(x), len(y)))
     print('max = %f \t min = %f' %
           (np.max(Z), np.min(Z)))
-    print(Z)
 
     if (len(x) <= 1 or len(y) <= 1):
         print('The length of coordinates is not enough for plotting contours')

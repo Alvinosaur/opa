@@ -109,7 +109,7 @@ def eval_performance_rot(policy: Policy, dataset, dstep, care_rot):
         indices = [i for i in range(len(dataset))
                    if object_types[i] == Params.IGNORE_ROT_IDX]
     np.random.shuffle(indices)
-    num_batches = min(10, int(np.ceil(len(indices) / batch_size)))
+    num_batches = min(20, int(np.ceil(len(indices) / batch_size)))
 
     total_loss = 0.0
     for b in range(num_batches):
@@ -170,7 +170,7 @@ def eval_performance_rot(policy: Policy, dataset, dstep, care_rot):
 def run_evaluation():
     model_name = "policy_2D"
     loaded_epoch = 100
-    num_steps = 20
+    num_steps = 70
     dstep = Params.dstep_2D
 
     with open(os.path.join(Params.model_root, model_name, "train_args_pt_1.json"), "r") as f:
@@ -303,18 +303,15 @@ def plot_evaluation():
     rot_loss_care = np.array(rot_loss_care)
     rot_loss_ignore = np.array(rot_loss_ignore)
 
-    import ipdb
-    ipdb.set_trace()
-
     plot_2d_contour(x, y, rot_loss_care, "rot_loss_care", vmin=0.1,
                     vmax=10, vlevel=0.5, show=True,
-                    xlabel='Rot Pref', ylabel='Rot Offset')
+                    xlabel='Rot Offset', ylabel='Rot Pref')
 
     plot_2d_contour(x, y, rot_loss_ignore, "rot_loss_ignore", vmin=0.1,
                     vmax=10, vlevel=0.5, show=True,
-                    xlabel='Rot Pref', ylabel='Rot Offset')
+                    xlabel='Rot Offset', ylabel='Rot Pref')
 
 
 if __name__ == "__main__":
-    run_evaluation()
-    # plot_evaluation()
+    # run_evaluation()
+    plot_evaluation()

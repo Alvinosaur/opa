@@ -27,7 +27,7 @@ def model_rollout(goal_tensors, current_inputs, start_tensors, goal_rot_inputs,
                   intervention_traj,
                   model: PolicyNetwork,
                   agent_radii, out_T, goal_pos_radius_scale, dstep,
-                  train_pos, train_rot, pos_dim):
+                  train_pos, train_rot, pos_dim, detach_steps=False):
     """
     Rollout model starting from current tensor for out_T timesteps. Recursively
     modifies current pose with predicted action to preserve gradient pipeline.
