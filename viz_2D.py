@@ -374,7 +374,7 @@ def viz_main(policy: Policy, test_data_root: str, calc_pos, calc_rot):
                    objects=objects, expert_traj=expert_traj, ax=ax, viz_args=viz_args)
 
 
-def viz_adaptation(policy: Policy, num_updates, test_data_root: str, train_pos, train_rot, is_rot_ignore, adaptation_func, save_res_dir=None, log_file=None):
+def viz_adaptation(policy: Policy, num_updates, test_data_root: str, train_pos, train_rot, is_rot_ignore, adaptation_func, use_rand_init, save_res_dir=None, log_file=None):
     """
     Visually evalutes 2D policy with varying number of adaptation steps, where
     adaptation is performed directly on expert data.
@@ -391,11 +391,11 @@ def viz_adaptation(policy: Policy, num_updates, test_data_root: str, train_pos, 
     # view traj at these update indices
     num_updates_series = list(range(num_updates + 1))
 
+    # First randomly sample N data samples
     N = 10
-    sample_i = 0
     seen = set()
+    sampled_file_idxs = []
     while sample_i < N:
-        # Load data
         rand_file_idx = np.random.choice(3000)
         if rand_file_idx in seen:
             continue
@@ -407,12 +407,15 @@ def viz_adaptation(policy: Policy, num_updates, test_data_root: str, train_pos, 
                 continue
             if not is_rot_ignore and object_types[0] != Params.CARE_ROT_IDX:
                 continue
-
-        print("OBJECT TYPES: ", object_types)
         seen.add(rand_file_idx)
-        sample_i += 1
-        print("file idx: %d" % rand_file_idx)
+        sampled_file_idxs.append(rand_file_idx)
         assert data["is_rot"].item() == train_rot
+
+    # Evaluate policy and adaptation on sampled data
+    sample_i = 0
+    for sample_i, rand_file_idx in enumerate(sampled_file_idxs):
+        print("OBJECT TYPES: ", object_types)
+        print("file idx: %d" % rand_file_idx)
         expert_traj = data["states"]
         T = expert_traj.shape[0]
         goal_radius = data["goal_radius"].item()
@@ -451,7 +454,7 @@ def viz_adaptation(policy: Policy, num_updates, test_data_root: str, train_pos, 
         rot_obj_types = [None] * num_objects  # None means no rot preference
         rot_requires_grad = [train_rot] * num_objects
         policy.init_new_objs(pos_obj_types=pos_obj_types, rot_obj_types=rot_obj_types,
-                             pos_requires_grad=pos_requires_grad, rot_requires_grad=rot_requires_grad, use_rand_init=True)
+                             pos_requires_grad=pos_requires_grad, rot_requires_grad=rot_requires_grad, use_rand_init=use_rand_init)
 
         # Observe model performance after various number of update steps
         total_updates = max(num_updates_series) + 1
@@ -515,6 +518,8 @@ def parse_arguments():
                         help="Use vanilla SGD to adapt object features.")
     parser.add_argument('--use_rls', action='store_true',
                         help="Use rls to adapt object features.")
+    parser.add_argument('--use_rand_init', action='store_true',
+                        help="Randomly init object features.")
     parser.add_argument('--use_learn2learn', action='store_true',
                         help="Use Learn2learn to adapt object features.")
     parser.add_argument('--connected_steps', action='store_true',
@@ -557,7 +562,7 @@ if __name__ == '__main__':
             lmbda = 0.9
             print(
                 f"Using RLS(alpha_{alpha}_lmbda_{lmbda}) to adapt object features.")
-            save_res_dir = f"eval_adaptation_results/RLS(alpha_{alpha}_lmbda_{lmbda})_detached"
+            save_res_dir = f"eval_adaptation_results/RLS(alpha_{alpha}_lmbda_{lmbda})_fixed_init"
             rls = RLS(alpha=alpha, lmbda=lmbda)
             adaptation_func = lambda *args, **kwargs: perform_adaptation_rls(
                 rls=rls, is_3D=train_args["is_3D"],
@@ -624,4 +629,4 @@ if __name__ == '__main__':
 
         viz_adaptation(policy, opt_args.num_updates, test_data_root,
                        train_pos=opt_args.calc_pos, train_rot=opt_args.calc_rot,
-                       adaptation_func=adaptation_func, is_rot_ignore=opt_args.is_rot_ignore, save_res_dir=f"{save_res_dir}/samples", log_file=log_file)
+                       adaptation_func=adaptation_func, is_rot_ignore=opt_args.is_rot_ignore, save_res_dir=f"{save_res_dir}/samples", log_file=log_file, use_rand_init=opt_args.use_rand_init)

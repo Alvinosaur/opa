@@ -22,6 +22,29 @@ def params2str(params):
     return np.array2string(params, precision=4, separator=', ')
 
 
+class Logger(object):
+    def __init__(self, log_file):
+        self.log_file = log_file
+        self.losses = []
+        self.pred_trajs = []
+        self.iteration = 0
+
+    def update(self, policy, batch_data_processed, train_pos, train_rot, dstep, params):
+        ############# Log Analysis Data #############
+        with torch.no_grad():
+            loss_debug, pred_traj_debug = adaptation_loss(
+                model=policy.policy_network,
+                batch_data_processed=batch_data_processed,
+                train_pos=train_pos, train_rot=train_rot,
+                dstep=dstep)
+        self.pred_trajs.append(pred_traj_debug.detach().cpu().numpy())
+        write_log(self.log_file, "iter %d loss: %.3f" %
+                  (self.iteration, loss_debug.item()))
+        write_log(self.log_file, f"Actual params: {params2str(params)}")
+        self.losses.append(loss_debug.item())
+        self.iteration += 1
+
+
 def model_rollout(goal_tensors, current_inputs, start_tensors, goal_rot_inputs,
                   object_inputs, obj_idx_tensors,
                   intervention_traj,
@@ -147,11 +170,13 @@ def adaptation_loss(model: PolicyNetwork, batch_data_processed, dstep,
             # loss function at adaptation time for position:
             # Calculate distance with each object for both human intervention and agent rollout
             # and measure difference in object distances
-            gt_dists = torch.norm(traj_tensors[:, 1:, :pos_dim] -
-                                  object_inputs[:, 1:, 0, :pos_dim], dim=-1, keepdim=True)
-            pred_dists = torch.norm(pred_traj[:, :, :pos_dim] -
-                                    object_inputs[:, 1:, 0, :pos_dim], dim=-1, keepdim=True)
-            pos_loss = torch.abs(gt_dists - pred_dists).mean()
+            # gt_dists = torch.norm(traj_tensors[:, 1:, :pos_dim] -
+            #                       object_inputs[:, 1:, 0, :pos_dim], dim=-1, keepdim=True)
+            # pred_dists = torch.norm(pred_traj[:, :, :pos_dim] -
+            #                         object_inputs[:, 1:, 0, :pos_dim], dim=-1, keepdim=True)
+            # pos_loss = torch.abs(gt_dists - pred_dists).mean()
+            pos_loss = torch.norm(traj_tensors[:, 1:, :pos_dim] -
+                                  pred_traj[:, :, :pos_dim], dim=-1).mean()
             loss = loss + pos_loss
 
         if train_rot:
@@ -207,21 +232,19 @@ def perform_adaptation(policy: Policy, batch_data: List[Tuple],
         losses: List of losses for each adaptation iteration
         pred_traj: Predicted trajectory for final adaptation iteration
     """
+    import ipdb
+    ipdb.set_trace()
     batch_data_processed = process_batch_data(
         batch_data, train_rot=None, n_samples=None, is_full_traj=True)
+    logger = Logger(log_file)
 
     # Only adapt parameters that aren't frozen
-    adaptable_parameters = []
+    params = []
     for p in policy.adaptable_parameters:
         if p.requires_grad:
-            adaptable_parameters.append(p)
-    if verbose:
-        write_log(
-            log_file, f"Actual params: {params2str(adaptable_parameters)}")
+            params.append(p)
 
-    optimizer = Optimizer(adaptable_parameters, **optim_params)
-    losses = []
-    pred_trajs = []
+    optimizer = Optimizer(params, **optim_params)
     if n_adapt_iters == 0:
         # Don't perform any update, but return loss and predicted trajectory
         with torch.no_grad():
@@ -232,13 +255,9 @@ def perform_adaptation(policy: Policy, batch_data: List[Tuple],
         return [loss.item()], [pred_traj.detach().cpu().numpy()]
 
     for iteration in (range(n_adapt_iters)):
+        logger.update(policy, batch_data_processed, train_pos=train_pos,
+                      train_rot=train_rot, dstep=dstep, params=params)
         if detached_steps:
-            with torch.no_grad():
-                loss_debug, pred_traj = adaptation_loss(model=policy.policy_network,
-                                                        batch_data_processed=batch_data_processed,
-                                                        train_pos=train_pos, train_rot=train_rot,
-                                                        dstep=dstep)
-
             n_samples = np.Inf  # use all timesteps of traj
             pos_loss, rot_loss = batch_inner_loop(model=policy.policy_network,
                                                   batch_data=batch_data, train_rot=train_rot, is_3D=is_3D, n_samples=n_samples, is_training=False)
@@ -248,35 +267,25 @@ def perform_adaptation(policy: Policy, batch_data: List[Tuple],
                                               batch_data_processed=batch_data_processed,
                                               train_pos=train_pos, train_rot=train_rot,
                                               dstep=dstep)
-            loss_debug = loss
         optimizer.zero_grad()
         loss.backward()
         if verbose:
-            old_params = [p.clone() for p in adaptable_parameters]
-            gradients = [p.grad.clone() for p in adaptable_parameters]
+            old_params = [p.clone() for p in params]
+            gradients = [p.grad.clone() for p in params]
         optimizer.step()
 
-        losses.append(loss_debug.item())
-        if ret_trajs:
-            pred_trajs.append(pred_traj.detach().cpu().numpy())
-
         if verbose:
-            for old_p, new_p, grad in zip(old_params, adaptable_parameters, gradients):
+            for old_p, new_p, grad in zip(old_params, params, gradients):
                 # NOTE: +update, not -update since new_p - old_p already accounts for the -1* direction
                 update = new_p - old_p
                 write_log(log_file, "-Original Grad: %.3f, -lr * Pred Grad:  %.3f, New P: %.3f" % (
                     -grad.item(), +update.item(), new_p.item()))
 
-            write_log(log_file, "iter %d loss: %.3f" %
-                      (iteration, loss_debug.item()))
-            write_log(
-                log_file, f"Actual params: {params2str(adaptable_parameters)}")
-
     # Clip learned features within expected range
     if clip_params:
         policy.clip_adaptable_parameters()
 
-    return losses, pred_trajs
+    return logger.losses, logger.pred_trajs
 
 
 def perform_adaptation_rls(policy: Policy, rls: RLS, batch_data: List[Tuple],
@@ -290,26 +299,22 @@ def perform_adaptation_rls(policy: Policy, rls: RLS, batch_data: List[Tuple],
     """
     pos_dim = 3 if is_3D else 2
     rot_dim = 6 if is_3D else 2
+    batch_data_processed = process_batch_data(
+        batch_data, train_rot=None, n_samples=None, is_full_traj=True)
+    logger = Logger(log_file)
 
     if reset_rls:
         rls.reset()
 
     # Only adapt parameters that aren't frozen
-    adaptable_parameters = []
+    params = []
     for p in policy.adaptable_parameters:
         if p.requires_grad:
-            adaptable_parameters.append(p)
-    if verbose:
-        write_log(
-            log_file, f"Actual params: {params2str(adaptable_parameters)}")
+            params.append(p)
 
-    losses = []
-    pred_trajs = []
     if n_adapt_iters == 0:
         # Don't perform any update, but return loss and predicted trajectory
         with torch.no_grad():
-            batch_data_processed = process_batch_data(
-                batch_data, train_rot=None, n_samples=None, is_full_traj=True)
             loss, pred_traj = adaptation_loss(model=policy.policy_network,
                                               batch_data_processed=batch_data_processed,
                                               train_pos=train_pos, train_rot=train_rot,
@@ -318,7 +323,9 @@ def perform_adaptation_rls(policy: Policy, rls: RLS, batch_data: List[Tuple],
 
     # run RLS for multiple iters? or just one iter?
     for iteration in range(n_adapt_iters):
-        loss_debug = None
+        logger.update(policy, batch_data_processed, train_pos=train_pos,
+                      train_rot=train_rot, dstep=dstep, params=params)
+
         if detached_steps:
             (pred_trans, pred_ori), traj_tensors = batch_inner_loop(
                 model=policy.policy_network,
@@ -335,15 +342,6 @@ def perform_adaptation_rls(policy: Policy, rls: RLS, batch_data: List[Tuple],
             pred_traj = torch.cat([pred_trans, pred_ori], dim=-1).unsqueeze(0)
             traj_tensors = traj_tensors.unsqueeze(0)
 
-            with torch.no_grad():
-                batch_data_processed = process_batch_data(
-                    batch_data, train_rot=None, n_samples=None, is_full_traj=True)
-                loss_debug, pred_traj_debug = adaptation_loss(
-                    model=policy.policy_network,
-                    batch_data_processed=batch_data_processed,
-                    train_pos=train_pos, train_rot=train_rot,
-                    dstep=dstep)
-
         else:
             # Unpack data
             (start_tensors, current_inputs, goal_tensors, goal_rot_inputs, object_inputs, obj_idx_tensors, _, _,
@@ -354,7 +352,7 @@ def perform_adaptation_rls(policy: Policy, rls: RLS, batch_data: List[Tuple],
                 [Params.agent_radius], device=DEVICE).view(1, 1).repeat(B, 1)
 
             # Perform agent prediction rollout
-            pred_traj_debug = pred_traj = model_rollout(
+            pred_traj = model_rollout(
                 goal_tensors=goal_tensors, current_inputs=current_inputs,
                 start_tensors=start_tensors, goal_rot_inputs=goal_rot_inputs,
                 object_inputs=object_inputs, obj_idx_tensors=obj_idx_tensors,
@@ -380,27 +378,13 @@ def perform_adaptation_rls(policy: Policy, rls: RLS, batch_data: List[Tuple],
         # yhat_sampled = yhat
 
         rls.update(y=y_sampled, yhat=yhat_sampled,
-                   thetas=adaptable_parameters, verbose=verbose, log_file=log_file, model=policy.policy_network)
-
-        loss = torch.norm(y - yhat, dim=2).mean()
-        if loss_debug is None:
-            loss_debug = loss
-
-        losses.append(loss_debug.item())
-        if ret_trajs:
-            pred_trajs.append(pred_traj_debug.detach().cpu().numpy())
-
-        if verbose:
-            write_log(log_file, "iter %d loss: %.3f" %
-                      (iteration, loss_debug.item()))
-            write_log(
-                log_file, f"Actual params: {params2str(adaptable_parameters)}")
+                   thetas=params, verbose=verbose, log_file=log_file, model=policy.policy_network)
 
     # Clip learned features within expected range
     if clip_params:
         policy.clip_adaptable_parameters()
 
-    return losses, pred_trajs
+    return logger.losses, logger.pred_trajs
 
 
 def perform_adaptation_learn2learn(policy: Policy, learned_opt, batch_data: List[Tuple],
@@ -416,6 +400,7 @@ def perform_adaptation_learn2learn(policy: Policy, learned_opt, batch_data: List
     """
     batch_data_processed = process_batch_data(
         batch_data, train_rot=None, n_samples=None, is_full_traj=True)
+    logger = Logger(log_file)
 
     # Reset hidden states of learned_opt
     if reset_lstm:
@@ -423,10 +408,6 @@ def perform_adaptation_learn2learn(policy: Policy, learned_opt, batch_data: List
 
     # Only adapt parameters that aren't frozen
     params = [p for p in policy.adaptable_parameters if p.requires_grad]
-    if verbose:
-        write_log(log_file, f"Actual params: {params2str(params)}")
-    losses = []
-    pred_trajs = []
     if n_adapt_iters == 0:
         # Don't perform any update, but return loss and predicted trajectory
         with torch.no_grad():
@@ -437,14 +418,10 @@ def perform_adaptation_learn2learn(policy: Policy, learned_opt, batch_data: List
         return [loss.item()], [pred_traj.detach().cpu().numpy()]
 
     for iteration in range(n_adapt_iters):
-        if detached_steps:
-            if ret_trajs:
-                with torch.no_grad():
-                    _, pred_traj = adaptation_loss(model=policy.policy_network,
-                                                   batch_data_processed=batch_data_processed,
-                                                   train_pos=train_pos, train_rot=train_rot,
-                                                   dstep=dstep)
+        logger.update(policy, batch_data_processed, train_pos=train_pos,
+                      train_rot=train_rot, dstep=dstep, params=params)
 
+        if detached_steps:
             n_samples = 64  # <= min(len(traj)) for easy stacking of batch data
             pos_loss, rot_loss = batch_inner_loop(model=policy.policy_network,
                                                   batch_data=batch_data, train_rot=train_rot, is_3D=is_3D, n_samples=n_samples, is_training=False)
@@ -468,19 +445,11 @@ def perform_adaptation_learn2learn(policy: Policy, learned_opt, batch_data: List
         # is now using a copy of new_params, so need new reference/ptr to them
         params = [p for p in policy.adaptable_parameters if p.requires_grad]
 
-        losses.append(loss.item())
-        if ret_trajs:
-            pred_trajs.append(pred_traj.detach().cpu().numpy())
-        if verbose:
-            write_log(log_file, "iter %d loss: %.3f" %
-                      (iteration, loss.item()))
-            write_log(log_file, f"Actual params: {params2str(params)}")
-
     # Clip learned features within expected range
     if clip_params:
         policy.clip_adaptable_parameters()
 
-    return losses, pred_trajs
+    return logger.losses, logger.pred_trajs
 
 
 def perform_adaptation_learn2learn_group(policy: Policy, learned_opts, batch_data: List[Tuple],
@@ -495,6 +464,7 @@ def perform_adaptation_learn2learn_group(policy: Policy, learned_opts, batch_dat
     """
     batch_data_processed = process_batch_data(
         batch_data, train_rot=None, n_samples=None, is_full_traj=True)
+    logger = Logger(log_file)
 
     # Reset hidden states of learned_opt
     if reset_lstm:
@@ -508,10 +478,7 @@ def perform_adaptation_learn2learn_group(policy: Policy, learned_opts, batch_dat
         if p.requires_grad:
             params.append(p)
             param_types.append(ptype)
-    write_log(log_file, f"Actual params: {params2str(params)}")
 
-    losses = []
-    pred_trajs = []
     if n_adapt_iters == 0:
         # Don't perform any update, but return loss and predicted trajectory
         with torch.no_grad():
@@ -522,13 +489,10 @@ def perform_adaptation_learn2learn_group(policy: Policy, learned_opts, batch_dat
         return [loss.item()], [pred_traj.detach().cpu().numpy()]
 
     for iteration in range(n_adapt_iters):
-        if detached_steps:
-            with torch.no_grad():
-                _, pred_traj = adaptation_loss(model=policy.policy_network,
-                                               batch_data_processed=batch_data_processed,
-                                               train_pos=train_pos, train_rot=train_rot,
-                                               dstep=dstep)
+        logger.update(policy, batch_data_processed, train_pos=train_pos,
+                      train_rot=train_rot, dstep=dstep, params=params)
 
+        if detached_steps:
             n_samples = np.Inf
             pos_loss, rot_loss = batch_inner_loop(model=policy.policy_network,
                                                   batch_data=batch_data, train_rot=train_rot, is_3D=is_3D, n_samples=n_samples, is_training=False)
@@ -550,17 +514,8 @@ def perform_adaptation_learn2learn_group(policy: Policy, learned_opts, batch_dat
         # is now using a copy of new_params, so need new reference/ptr to them
         params = [p for p in policy.adaptable_parameters if p.requires_grad]
 
-        losses.append(loss.item())
-        if ret_trajs:
-            pred_trajs.append(pred_traj.detach().cpu().numpy())
-
-        if verbose:
-            write_log(log_file, "iter %d loss: %.3f" %
-                      (iteration, loss.item()))
-            write_log(log_file, f"Actual params: {params2str(params)}")
-
     # Clip learned features within expected range
     if clip_params:
         policy.clip_adaptable_parameters()
 
-    return losses, pred_trajs
+    return logger.losses, logger.pred_trajs
