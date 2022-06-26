@@ -27,7 +27,7 @@ def model_rollout(goal_tensors, current_inputs, start_tensors, goal_rot_inputs,
                   intervention_traj,
                   model: PolicyNetwork,
                   agent_radii, out_T, goal_pos_radius_scale, dstep,
-                  train_pos, train_rot, pos_dim, detach_steps=False):
+                  train_pos, train_rot, pos_dim):
     """
     Rollout model starting from current tensor for out_T timesteps. Recursively
     modifies current pose with predicted action to preserve gradient pipeline.
@@ -186,12 +186,13 @@ def adaptation_loss(model: PolicyNetwork, batch_data_processed, dstep,
 
 def perform_adaptation(policy: Policy, batch_data: List[Tuple],
                        train_pos: bool, train_rot: bool,
-                       n_adapt_iters: int, dstep: float,
+                       n_adapt_iters: int, dstep: float, is_3D,
                        verbose=False, clip_params=True,
                        ret_trajs=False,
                        Optimizer=torch.optim.Adam,
                        log_file=None,
-                       optim_params={'lr': 0.1}):
+                       optim_params={'lr': 0.1},
+                       detached_steps=True):
     """
     Adapts the policy to the batch of human intervention data.
     :param policy: Policy to adapt
@@ -231,10 +232,23 @@ def perform_adaptation(policy: Policy, batch_data: List[Tuple],
         return [loss.item()], [pred_traj.detach().cpu().numpy()]
 
     for iteration in (range(n_adapt_iters)):
-        loss, pred_traj = adaptation_loss(model=policy.policy_network,
-                                          batch_data_processed=batch_data_processed,
-                                          train_pos=train_pos, train_rot=train_rot,
-                                          dstep=dstep)
+        if detached_steps:
+            with torch.no_grad():
+                loss_debug, pred_traj = adaptation_loss(model=policy.policy_network,
+                                                        batch_data_processed=batch_data_processed,
+                                                        train_pos=train_pos, train_rot=train_rot,
+                                                        dstep=dstep)
+
+            n_samples = np.Inf  # use all timesteps of traj
+            pos_loss, rot_loss = batch_inner_loop(model=policy.policy_network,
+                                                  batch_data=batch_data, train_rot=train_rot, is_3D=is_3D, n_samples=n_samples, is_training=False)
+            loss = pos_loss + rot_loss
+        else:
+            loss, pred_traj = adaptation_loss(model=policy.policy_network,
+                                              batch_data_processed=batch_data_processed,
+                                              train_pos=train_pos, train_rot=train_rot,
+                                              dstep=dstep)
+            loss_debug = loss
         optimizer.zero_grad()
         loss.backward()
         if verbose:
@@ -242,7 +256,7 @@ def perform_adaptation(policy: Policy, batch_data: List[Tuple],
             gradients = [p.grad.clone() for p in adaptable_parameters]
         optimizer.step()
 
-        losses.append(loss.item())
+        losses.append(loss_debug.item())
         if ret_trajs:
             pred_trajs.append(pred_traj.detach().cpu().numpy())
 
@@ -254,7 +268,7 @@ def perform_adaptation(policy: Policy, batch_data: List[Tuple],
                     -grad.item(), +update.item(), new_p.item()))
 
             write_log(log_file, "iter %d loss: %.3f" %
-                      (iteration, loss.item()))
+                      (iteration, loss_debug.item()))
             write_log(
                 log_file, f"Actual params: {params2str(adaptable_parameters)}")
 
@@ -267,14 +281,15 @@ def perform_adaptation(policy: Policy, batch_data: List[Tuple],
 
 def perform_adaptation_rls(policy: Policy, rls: RLS, batch_data: List[Tuple],
                            train_pos: bool, train_rot: bool,
-                           n_adapt_iters: int, dstep: float,
+                           n_adapt_iters: int, dstep: float, is_3D,
                            verbose=False, clip_params=True,
-                           ret_trajs=False, log_file=None, reset_rls=True):
+                           ret_trajs=False, log_file=None, reset_rls=True,
+                           detached_steps=True):
     """
     Recursive Least Squares Adaptation
     """
-    batch_data_processed = process_batch_data(
-        batch_data, train_rot=None, n_samples=None, is_full_traj=True)
+    pos_dim = 3 if is_3D else 2
+    rot_dim = 6 if is_3D else 2
 
     if reset_rls:
         rls.reset()
@@ -293,39 +308,66 @@ def perform_adaptation_rls(policy: Policy, rls: RLS, batch_data: List[Tuple],
     if n_adapt_iters == 0:
         # Don't perform any update, but return loss and predicted trajectory
         with torch.no_grad():
+            batch_data_processed = process_batch_data(
+                batch_data, train_rot=None, n_samples=None, is_full_traj=True)
             loss, pred_traj = adaptation_loss(model=policy.policy_network,
                                               batch_data_processed=batch_data_processed,
                                               train_pos=train_pos, train_rot=train_rot,
                                               dstep=dstep)
         return [loss.item()], [pred_traj.detach().cpu().numpy()]
 
-    # Unpack data
-    (start_tensors, current_inputs, goal_tensors, goal_rot_inputs, object_inputs, obj_idx_tensors, _, _,
-        traj_tensors) = process_batch_data(batch_data, train_rot=None, n_samples=None, is_full_traj=True)
-    B, T = traj_tensors.shape[0:2]
-    input_dim = traj_tensors.shape[2] - 1  # excluding radius
-    pos_dim = 3 if input_dim == 9 else 2
-    rot_dim = 6 if input_dim == 9 else 2
-    out_T = T - 1
-    agent_radii = torch.tensor(
-        [Params.agent_radius], device=DEVICE).view(1, 1).repeat(B, 1)
-
     # run RLS for multiple iters? or just one iter?
     for iteration in range(n_adapt_iters):
-        # Perform agent prediction rollout
-        pred_traj = model_rollout(goal_tensors=goal_tensors, current_inputs=current_inputs,
-                                  start_tensors=start_tensors, goal_rot_inputs=goal_rot_inputs,
-                                  object_inputs=object_inputs, obj_idx_tensors=obj_idx_tensors,
-                                  intervention_traj=traj_tensors,
-                                  model=policy.policy_network,
-                                  agent_radii=agent_radii, out_T=out_T,
-                                  goal_pos_radius_scale=1.0, dstep=dstep,
-                                  train_pos=train_pos, train_rot=train_rot, pos_dim=pos_dim)
+        loss_debug = None
+        if detached_steps:
+            (pred_trans, pred_ori), traj_tensors = batch_inner_loop(
+                model=policy.policy_network,
+                batch_data=batch_data, train_rot=train_rot, is_3D=is_3D, n_samples=np.Inf, is_training=False, ret_predictions=True)
+
+            if train_rot:
+                assert pred_trans is None
+                pred_trans = torch.zeros(
+                    (pred_ori.shape[0], pos_dim), device=DEVICE)
+            else:
+                assert pred_ori is None
+                pred_ori = torch.zeros(
+                    (pred_trans.shape[0], rot_dim), device=DEVICE)
+            pred_traj = torch.cat([pred_trans, pred_ori], dim=-1).unsqueeze(0)
+            traj_tensors = traj_tensors.unsqueeze(0)
+
+            with torch.no_grad():
+                batch_data_processed = process_batch_data(
+                    batch_data, train_rot=None, n_samples=None, is_full_traj=True)
+                loss_debug, pred_traj_debug = adaptation_loss(
+                    model=policy.policy_network,
+                    batch_data_processed=batch_data_processed,
+                    train_pos=train_pos, train_rot=train_rot,
+                    dstep=dstep)
+
+        else:
+            # Unpack data
+            (start_tensors, current_inputs, goal_tensors, goal_rot_inputs, object_inputs, obj_idx_tensors, _, _,
+             traj_tensors) = process_batch_data(batch_data, train_rot=None, n_samples=None, is_full_traj=True)
+            traj_tensors = traj_tensors[:, 1:, ]
+            B, out_T = traj_tensors.shape[0:2]
+            agent_radii = torch.tensor(
+                [Params.agent_radius], device=DEVICE).view(1, 1).repeat(B, 1)
+
+            # Perform agent prediction rollout
+            pred_traj_debug = pred_traj = model_rollout(
+                goal_tensors=goal_tensors, current_inputs=current_inputs,
+                start_tensors=start_tensors, goal_rot_inputs=goal_rot_inputs,
+                object_inputs=object_inputs, obj_idx_tensors=obj_idx_tensors,
+                intervention_traj=traj_tensors,
+                model=policy.policy_network,
+                agent_radii=agent_radii, out_T=out_T,
+                goal_pos_radius_scale=1.0, dstep=dstep,
+                train_pos=train_pos, train_rot=train_rot, pos_dim=pos_dim)
 
         # Compute error for RLS (Least squares loss) (y - yhat)
         left = 0 if train_pos else pos_dim
         right = pos_dim + rot_dim if train_rot else pos_dim
-        y = traj_tensors[:, 1:, left:right]
+        y = traj_tensors[:, :, left:right]
         yhat = pred_traj[:, :, left:right]
 
         # RLS is slow, so only calculate loss for subset of traj
@@ -341,13 +383,16 @@ def perform_adaptation_rls(policy: Policy, rls: RLS, batch_data: List[Tuple],
                    thetas=adaptable_parameters, verbose=verbose, log_file=log_file, model=policy.policy_network)
 
         loss = torch.norm(y - yhat, dim=2).mean()
-        losses.append(loss.item())
+        if loss_debug is None:
+            loss_debug = loss
+
+        losses.append(loss_debug.item())
         if ret_trajs:
-            pred_trajs.append(pred_traj.detach().cpu().numpy())
+            pred_trajs.append(pred_traj_debug.detach().cpu().numpy())
 
         if verbose:
             write_log(log_file, "iter %d loss: %.3f" %
-                      (iteration, loss.item()))
+                      (iteration, loss_debug.item()))
             write_log(
                 log_file, f"Actual params: {params2str(adaptable_parameters)}")
 
@@ -364,7 +409,8 @@ def perform_adaptation_learn2learn(policy: Policy, learned_opt, batch_data: List
                                    is_3D,
                                    verbose=False, clip_params=True,
                                    ret_trajs=False,
-                                   reset_lstm=True, log_file=None):
+                                   reset_lstm=True, log_file=None,
+                                   detached_steps=True):
     """
     learned_opt: LearnedOptimizer from learn2learn.py
     """
@@ -391,16 +437,23 @@ def perform_adaptation_learn2learn(policy: Policy, learned_opt, batch_data: List
         return [loss.item()], [pred_traj.detach().cpu().numpy()]
 
     for iteration in range(n_adapt_iters):
-        # loss, pred_traj = adaptation_loss(model=policy.policy_network,
-        #                                   batch_data_processed=batch_data_processed,
-        #                                   train_pos=train_pos, train_rot=train_rot,
-        #                                   dstep=dstep)
+        if detached_steps:
+            if ret_trajs:
+                with torch.no_grad():
+                    _, pred_traj = adaptation_loss(model=policy.policy_network,
+                                                   batch_data_processed=batch_data_processed,
+                                                   train_pos=train_pos, train_rot=train_rot,
+                                                   dstep=dstep)
 
-        pred_traj = None
-        n_samples = 64
-        pos_loss, rot_loss = batch_inner_loop(model=policy.policy_network,
-                                              batch_data=batch_data, train_rot=train_rot, is_3D=is_3D, n_samples=n_samples, is_training=False)
-        loss = pos_loss + rot_loss
+            n_samples = 64  # <= min(len(traj)) for easy stacking of batch data
+            pos_loss, rot_loss = batch_inner_loop(model=policy.policy_network,
+                                                  batch_data=batch_data, train_rot=train_rot, is_3D=is_3D, n_samples=n_samples, is_training=False)
+            loss = pos_loss + rot_loss
+        else:
+            loss, pred_traj = adaptation_loss(model=policy.policy_network,
+                                              batch_data_processed=batch_data_processed,
+                                              train_pos=train_pos, train_rot=train_rot,
+                                              dstep=dstep)
 
         is_final = iteration == n_adapt_iters - 1
         new_params, need_reset = learned_opt.step(
@@ -435,7 +488,8 @@ def perform_adaptation_learn2learn_group(policy: Policy, learned_opts, batch_dat
                                          n_adapt_iters: int, dstep: float, is_3D,
                                          verbose=False, clip_params=True,
                                          ret_trajs=False,
-                                         reset_lstm=True, log_file=None):
+                                         reset_lstm=True, log_file=None,
+                                         detached_steps=True):
     """
     learned_opt: LearnedOptimizer from learn2learn.py
     """
@@ -468,16 +522,22 @@ def perform_adaptation_learn2learn_group(policy: Policy, learned_opts, batch_dat
         return [loss.item()], [pred_traj.detach().cpu().numpy()]
 
     for iteration in range(n_adapt_iters):
-        # with torch.no_grad():
-        loss, pred_traj = adaptation_loss(model=policy.policy_network,
-                                          batch_data_processed=batch_data_processed,
-                                          train_pos=train_pos, train_rot=train_rot,
-                                          dstep=dstep)
+        if detached_steps:
+            with torch.no_grad():
+                _, pred_traj = adaptation_loss(model=policy.policy_network,
+                                               batch_data_processed=batch_data_processed,
+                                               train_pos=train_pos, train_rot=train_rot,
+                                               dstep=dstep)
 
-        # n_samples = np.Inf  # use all timesteps of traj
-        # pos_loss, rot_loss = batch_inner_loop(model=policy.policy_network,
-        #                                       batch_data=batch_data, train_rot=train_rot, is_3D=is_3D, n_samples=n_samples, is_training=False)
-        # loss = pos_loss + rot_loss
+            n_samples = np.Inf
+            pos_loss, rot_loss = batch_inner_loop(model=policy.policy_network,
+                                                  batch_data=batch_data, train_rot=train_rot, is_3D=is_3D, n_samples=n_samples, is_training=False)
+            loss = pos_loss + rot_loss
+        else:
+            loss, pred_traj = adaptation_loss(model=policy.policy_network,
+                                              batch_data_processed=batch_data_processed,
+                                              train_pos=train_pos, train_rot=train_rot,
+                                              dstep=dstep)
 
         new_params, need_reset = learned_opts.step(
             loss, params, verbose=verbose, param_types=param_types, log_file=log_file)

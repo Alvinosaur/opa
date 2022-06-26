@@ -329,7 +329,7 @@ def train(policy: Policy, learned_opt: LearnedOptimizer, train_args, saved_root:
         root=f"data/rot_{str_3D}_train", buffer_size=buffer_size)
 
     batch_size = train_args.batch_size
-    num_epochs = 5
+    num_epochs = 4
     epochs_per_save = 1
 
     # Update over both pos and rot data one-by-one

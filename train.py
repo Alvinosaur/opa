@@ -25,7 +25,7 @@ torch.manual_seed(seed)
 random.seed(seed)
 
 cuda = torch.cuda.is_available()
-DEVICE = "cuda:1" if cuda else "cpu"
+DEVICE = "cuda:0" if cuda else "cpu"
 if cuda:
     print("CUDA GPU!")
 else:
@@ -303,7 +303,8 @@ def process_batch_data(batch_data, train_rot, n_samples, is_full_traj=False):
 def batch_inner_loop(model: PolicyNetwork, batch_data: List[Tuple],
                      is_3D: bool,
                      train_rot: bool,
-                     n_samples=8, is_training=True, is_full_traj=False):
+                     n_samples=8, is_training=True, is_full_traj=False,
+                     use_L2_loss=False, ret_predictions=False):
     """
 
 
@@ -342,6 +343,10 @@ def batch_inner_loop(model: PolicyNetwork, batch_data: List[Tuple],
                                                 calc_rot=train_rot,
                                                 is_training=is_training)
 
+    if ret_predictions:
+        return ((output_vec, output_ori),
+                torch.cat([all_tgt_trans_tensors, all_tgt_ori_tensors], dim=-1))
+
     pos_loss = torch.tensor([0.0], device=DEVICE)
     theta_loss = torch.tensor([0.0], device=DEVICE)
     if train_rot:
@@ -358,8 +363,13 @@ def batch_inner_loop(model: PolicyNetwork, batch_data: List[Tuple],
             theta_loss = (1 - torch.bmm(output_ori.unsqueeze(1),
                           all_tgt_ori_tensors.unsqueeze(-1))).mean()
     else:  # train_pos
-        pos_loss = (1 - torch.bmm(output_vec.unsqueeze(1),
-                    all_tgt_trans_tensors.unsqueeze(-1))).mean()
+        if use_L2_loss:
+            # L2 loss in next pos == L2 loss in predicted direction b/c both next pos share the same current pos, just diff direction
+            pos_loss = torch.square(
+                output_vec - all_tgt_trans_tensors).sum(dim=-1).mean()
+        else:
+            pos_loss = (1 - torch.bmm(output_vec.unsqueeze(1),
+                        all_tgt_trans_tensors.unsqueeze(-1))).mean()
 
     return pos_loss, theta_loss
 

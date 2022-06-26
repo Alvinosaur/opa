@@ -5,7 +5,7 @@ import matplotlib.pyplot as plt
 import re
 
 
-model = "RLS"
+model = "Adam"
 
 if model == "LSTM":
     model_name = "learn2learn_group_diff_init"
@@ -13,10 +13,10 @@ if model == "LSTM":
 elif model == "RLS":
     alpha = 0.5
     lmbda = 0.9
-    model_name = "RLS(alpha_%.1f_lmbda_%.1f)" % (alpha, lmbda)
+    model_name = "RLS(alpha_%.1f_lmbda_%.1f)_detached" % (alpha, lmbda)
     model_title = model_name
 elif model == "Adam":
-    model_name = model_title = model
+    model_name = model_title = "Adam_detached"
 elif model == "SGD":
     lr = 0.1
     momentum = 0.9
@@ -26,21 +26,21 @@ else:
     raise NotImplementedError
 
 
-num_steps = 32  # [0, ..., 31]
-# num_steps = 22
+# num_steps = 32  # [0, ..., 31]
+num_steps = 22
 # num_samples = 10  # only show first 10 samples for clarity
 
-# data_name = "pos"
+data_name = "pos"
 # data_name = "rot"
-data_name = "rot_ignore"
+# data_name = "rot_ignore"
 
 # data_type = "pos attract"
-# data_type = "pos repel"
-data_type = "rot pref"
+data_type = "pos repel"
+# data_type = "rot pref"
 # data_type = "rot offset"
 
-root_folder = "/home/alvin/research/intelligent_control_lab/human_robot_interaction/opa"
-# root_folder = "/home/ashek/research/hri/opa"
+# root_folder = "/home/alvin/research/intelligent_control_lab/human_robot_interaction/opa"
+root_folder = "/home/ashek/research/hri/opa"
 
 folder = "%s/eval_adaptation_results/%s_%s" % (
     root_folder, model_name, data_name)

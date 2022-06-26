@@ -451,7 +451,7 @@ def viz_adaptation(policy: Policy, num_updates, test_data_root: str, train_pos, 
         rot_obj_types = [None] * num_objects  # None means no rot preference
         rot_requires_grad = [train_rot] * num_objects
         policy.init_new_objs(pos_obj_types=pos_obj_types, rot_obj_types=rot_obj_types,
-                             pos_requires_grad=pos_requires_grad, rot_requires_grad=rot_requires_grad, use_rand_init=False)
+                             pos_requires_grad=pos_requires_grad, rot_requires_grad=rot_requires_grad, use_rand_init=True)
 
         # Observe model performance after various number of update steps
         total_updates = max(num_updates_series) + 1
@@ -517,19 +517,21 @@ def parse_arguments():
                         help="Use rls to adapt object features.")
     parser.add_argument('--use_learn2learn', action='store_true',
                         help="Use Learn2learn to adapt object features.")
+    parser.add_argument('--connected_steps', action='store_true',
+                        help="Preserve gradient between iterative rollout steps")
     parser.add_argument('--learn2learn_name', action='store',
                         type=str, help="trained learned optimizer")
     return parser.parse_args()
 
 
 if __name__ == '__main__':
-    args = parse_arguments()
-    assert args.model_name is not None
+    opt_args = parse_arguments()
+    assert opt_args.model_name is not None
 
     # Load trained model arguments
-    with open(os.path.join(Params.model_root, args.model_name, "train_args_pt_1.json"), "r") as f:
+    with open(os.path.join(Params.model_root, opt_args.model_name, "train_args_pt_1.json"), "r") as f:
         train_args = json.load(f)
-    test_data_root = f"{Params.data_root}/{args.data_name}_test/"
+    test_data_root = f"{Params.data_root}/{opt_args.data_name}_test/"
 
     # load model
     assert not train_args["is_3D"], "viz_2D only for 2D models"
@@ -539,27 +541,28 @@ if __name__ == '__main__':
                             hidden_dim=train_args['hidden_dim'],
                             device=DEVICE).to(DEVICE)
     network.load_state_dict(
-        torch.load(os.path.join(Params.model_root, args.model_name, "model_%d.h5" % args.loaded_epoch)))
+        torch.load(os.path.join(Params.model_root, opt_args.model_name, "model_%d.h5" % opt_args.loaded_epoch)))
     policy = Policy(network)
 
     # ######### Visualize pretrained behavior #######
-    if not args.adapt:
+    if not opt_args.adapt:
         viz_main(policy, test_data_root,
-                 calc_pos=args.calc_pos, calc_rot=args.calc_rot)
+                 calc_pos=opt_args.calc_pos, calc_rot=opt_args.calc_rot)
 
     # ######### Visualize adaptation behavior #######
     # define scene objects and whether or not we care about their pos/ori
     else:
-        if args.use_rls:
+        if opt_args.use_rls:
             alpha = 0.5
             lmbda = 0.9
             print(
                 f"Using RLS(alpha_{alpha}_lmbda_{lmbda}) to adapt object features.")
-            save_res_dir = f"eval_adaptation_results/RLS(alpha_{alpha}_lmbda_{lmbda})"
+            save_res_dir = f"eval_adaptation_results/RLS(alpha_{alpha}_lmbda_{lmbda})_detached"
             rls = RLS(alpha=alpha, lmbda=lmbda)
             adaptation_func = lambda *args, **kwargs: perform_adaptation_rls(
-                rls=rls, *args, **kwargs)
-        elif args.use_learn2learn:
+                rls=rls, is_3D=train_args["is_3D"],
+                detached_steps=not opt_args.connected_steps, *args, **kwargs)
+        elif opt_args.use_learn2learn:
             print("Using Learn2Learn to adapt object features.")
             save_res_dir = f"eval_adaptation_results/learn2learn_group_train_dot_prod_eval_L2"
             learned_opts = LearnedOptimizerGroup(
@@ -573,47 +576,52 @@ if __name__ == '__main__':
                 pos_epoch=3, rot_epoch=4, rot_offset_epoch=3)
             adaptation_func = lambda *args, **kwargs: perform_adaptation_learn2learn_group(
                 learned_opts=learned_opts, is_3D=train_args["is_3D"],
+                detached_steps=not opt_args.connected_steps,
                 *args, **kwargs)
 
             # learned_opt = LearnedOptimizer(device=DEVICE, max_steps=2)
             # learned_opt.to(DEVICE)
             # learned_opt.train()
-            # if args.learn2learn_name is not None:
-            #     save_res_dir = f"eval_adaptation_results/{args.model_name}"
+            # if opt_args.learn2learn_name is not None:
+            #     save_res_dir = f"eval_adaptation_results/{opt_args.model_name}"
             #     learned_opt.load_state_dict(
-            #         torch.load(os.path.join(Params.model_root, args.model_name, args.learn2learn_name)))
+            #         torch.load(os.path.join(Params.model_root, opt_args.model_name, opt_args.learn2learn_name)))
             # else:
             #     save_res_dir = None
             #     print(
             #         "WARNING: No learned optimizer name provided. Using random init weights!")
             # adaptation_func = lambda *args, **kwargs: perform_adaptation_learn2learn(
             #     learned_opt=learned_opt, *args, **kwargs)
-        elif args.use_sgd:
+        elif opt_args.use_sgd:
             print("Using SGD to adapt object features.")
             optim_params = {'lr': 0.1, 'momentum': 0.9}
             adaptation_func = lambda *args, **kwargs: perform_adaptation(
-                Optimizer=torch.optim.SGD, optim_params=optim_params, *args, **kwargs)
+                Optimizer=torch.optim.SGD, optim_params=optim_params,
+                detached_steps=not opt_args.connected_steps,
+                is_3D=train_args["is_3D"], *args, **kwargs)
             save_res_dir = "eval_adaptation_results/SGD(lr_%.1f_momentum_%.1f)" % (
                 optim_params['lr'], optim_params['momentum'])
         else:
             print("Using Adam to adapt object features.")
             optim_params = {'lr': 0.1}
             adaptation_func = lambda *args, **kwargs: perform_adaptation(
-                Optimizer=torch.optim.Adam, optim_params=optim_params, *args, **kwargs)
-            save_res_dir = "eval_adaptation_results/Adam"
+                Optimizer=torch.optim.Adam, optim_params=optim_params,
+                detached_steps=not opt_args.connected_steps,
+                is_3D=train_args["is_3D"], *args, **kwargs)
+            save_res_dir = "eval_adaptation_results/Adam_detached"
 
         if save_res_dir is not None:
-            if args.calc_pos:
+            if opt_args.calc_pos:
                 save_res_dir += "_pos"
-            if args.calc_rot:
+            if opt_args.calc_rot:
                 save_res_dir += "_rot"
-            if args.is_rot_ignore:
+            if opt_args.is_rot_ignore:
                 save_res_dir += "_ignore"
             os.makedirs(f"{save_res_dir}/samples", exist_ok=True)
             log_file = open(f"{save_res_dir}/qualitative_output.txt", "w")
         else:
             log_file = None
 
-        viz_adaptation(policy, args.num_updates, test_data_root,
-                       train_pos=args.calc_pos, train_rot=args.calc_rot,
-                       adaptation_func=adaptation_func, is_rot_ignore=args.is_rot_ignore, save_res_dir=f"{save_res_dir}/samples", log_file=log_file)
+        viz_adaptation(policy, opt_args.num_updates, test_data_root,
+                       train_pos=opt_args.calc_pos, train_rot=opt_args.calc_rot,
+                       adaptation_func=adaptation_func, is_rot_ignore=opt_args.is_rot_ignore, save_res_dir=f"{save_res_dir}/samples", log_file=log_file)
