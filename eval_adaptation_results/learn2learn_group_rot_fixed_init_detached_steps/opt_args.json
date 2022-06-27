@@ -1,0 +1,16 @@
+{
+    "model_name": "policy_2D",
+    "data_name": "rot_2D",
+    "loaded_epoch": 100,
+    "num_updates": 30,
+    "calc_rot": true,
+    "is_rot_ignore": false,
+    "calc_pos": false,
+    "adapt": true,
+    "use_sgd": false,
+    "use_rls": false,
+    "use_rand_init": false,
+    "use_learn2learn": true,
+    "connected_steps": false,
+    "learn2learn_name": null
+}

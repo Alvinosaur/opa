@@ -273,45 +273,68 @@ def run_evaluation():
     np.save("param_loss_data_rot.npy", param_loss_data)
 
 
-def plot_evaluation():
-    # # Position
-    # loss_data_path = "param_loss_data_pos_cos_sim.npy"
-    # data = np.load(loss_data_path)
-    # y = np.array([data[i][0][0] for i in range(len(data))])  # repel
-    # x = np.array([data[0][j][1] for j in range(len(data[0]))])   # attract
-    # Z = [[None] * len(data) for _ in range(len(data))]
-    # for i in range(len(data)):
-    #     for j in range(len(data[0])):
-    #         Z[i][j] = data[i][j][2]
-    # Z = np.array(Z)
+def plot_evaluation(loss_folder=None, traj_idx=None, is_pos=True):
+    if loss_folder is not None:
+        opt_args = json.load(open(os.path.join(loss_folder, "opt_args.json")))
+        is_pos = opt_args['calc_pos']
 
-    # plot_2d_contour(x, y, Z, "pos_loss_cos_sim", vmin=0.1,
-    #                 vmax=10, vlevel=0.5, show=True,
-    #                 xlabel='Attract Feature', ylabel='Repel Feature')
+    # # Position
+    if is_pos:
+        loss_data_path = "param_loss_data_pos_cos_sim.npy"
+        data = np.load(loss_data_path)
+        y = np.array([data[i][0][0] for i in range(len(data))])  # repel
+        x = np.array([data[0][j][1] for j in range(len(data[0]))])   # attract
+        Z = [[None] * len(data) for _ in range(len(data))]
+        for i in range(len(data)):
+            for j in range(len(data[0])):
+                Z[i][j] = data[i][j][2]
+        Z = np.array(Z)
+
+        plot_2d_contour(x, y, Z, "pos_loss", vmin=0.1,
+                        vmax=10, vlevel=0.5, show=False,
+                        xlabel='Attract Feature', ylabel='Repel Feature')
+
+        if loss_folder is not None:
+            pref_params = np.load(os.path.join(
+                loss_folder, "actual_params.npy"))
+            sample_loss = np.load(os.path.join(
+                loss_folder, "loss.npy"))
+
+            # plot 3d trajectory of parameters over loss curve for the traj_idx
+            ax = plt.gca()
+            repel_params = pref_params[traj_idx, :, 0]
+            attract_params = pref_params[traj_idx, :, 1]
+            ax.plot(attract_params, repel_params,
+                    sample_loss[traj_idx, :], '-o', color='red')
+
+        plt.show()
 
     # Rotation
-    loss_data_path = "param_loss_data_rot.npy"
-    data = np.load(loss_data_path)
-    y = np.array([data[i][0][0] for i in range(len(data))])  # rot feat
-    x = np.array([data[0][j][1] for j in range(len(data[0]))])  # rot offset
-    rot_loss_care = [[None] * len(data) for _ in range(len(data))]
-    rot_loss_ignore = [[None] * len(data) for _ in range(len(data))]
-    for i in range(len(data)):
-        for j in range(len(data[0])):
-            rot_loss_care[i][j] = data[i][j][2]
-            rot_loss_ignore[i][j] = data[i][j][3]
-    rot_loss_care = np.array(rot_loss_care)
-    rot_loss_ignore = np.array(rot_loss_ignore)
+    else:
+        loss_data_path = "param_loss_data_rot.npy"
+        data = np.load(loss_data_path)
+        y = np.array([data[i][0][0] for i in range(len(data))])  # rot feat
+        x = np.array([data[0][j][1]
+                     for j in range(len(data[0]))])  # rot offset
+        rot_loss_care = [[None] * len(data) for _ in range(len(data))]
+        rot_loss_ignore = [[None] * len(data) for _ in range(len(data))]
+        for i in range(len(data)):
+            for j in range(len(data[0])):
+                rot_loss_care[i][j] = data[i][j][2]
+                rot_loss_ignore[i][j] = data[i][j][3]
+        rot_loss_care = np.array(rot_loss_care)
+        rot_loss_ignore = np.array(rot_loss_ignore)
 
-    plot_2d_contour(x, y, rot_loss_care, "rot_loss_care", vmin=0.1,
-                    vmax=10, vlevel=0.5, show=True,
-                    xlabel='Rot Offset', ylabel='Rot Pref')
+        plot_2d_contour(x, y, rot_loss_care, "rot_loss_care", vmin=0.1,
+                        vmax=10, vlevel=0.5, show=False,
+                        xlabel='Rot Offset', ylabel='Rot Pref')
 
-    plot_2d_contour(x, y, rot_loss_ignore, "rot_loss_ignore", vmin=0.1,
-                    vmax=10, vlevel=0.5, show=True,
-                    xlabel='Rot Offset', ylabel='Rot Pref')
+        plot_2d_contour(x, y, rot_loss_ignore, "rot_loss_ignore", vmin=0.1,
+                        vmax=10, vlevel=0.5, show=False,
+                        xlabel='Rot Offset', ylabel='Rot Pref')
 
 
 if __name__ == "__main__":
     # run_evaluation()
-    plot_evaluation()
+    plot_evaluation(
+        loss_folder="eval_adaptation_results/Adam_pos_fixed_init_detached_steps", traj_idx=0)

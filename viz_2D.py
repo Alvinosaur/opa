@@ -392,30 +392,34 @@ def viz_adaptation(policy: Policy, num_updates, test_data_root: str, train_pos, 
     num_updates_series = list(range(num_updates + 1))
 
     # First randomly sample N data samples
-    N = 10
+    N = 30
     seen = set()
     sampled_file_idxs = []
-    while sample_i < N:
+    while len(sampled_file_idxs) < N:
         rand_file_idx = np.random.choice(3000)
         if rand_file_idx in seen:
             continue
         data = np.load(os.path.join(test_data_root, "traj_%d.npz" %
                        rand_file_idx), allow_pickle=True)
+        assert data["is_rot"].item() == train_rot
         object_types = data["object_types"]
         if train_rot:
             if is_rot_ignore and object_types[0] != Params.IGNORE_ROT_IDX:
                 continue
             if not is_rot_ignore and object_types[0] != Params.CARE_ROT_IDX:
                 continue
-        seen.add(rand_file_idx)
-        sampled_file_idxs.append(rand_file_idx)
-        assert data["is_rot"].item() == train_rot
+        if rand_file_idx not in seen:
+            seen.add(rand_file_idx)
+            sampled_file_idxs.append(rand_file_idx)
 
     # Evaluate policy and adaptation on sampled data
     sample_i = 0
     for sample_i, rand_file_idx in enumerate(sampled_file_idxs):
+        data = np.load(os.path.join(test_data_root, "traj_%d.npz" %
+                       rand_file_idx), allow_pickle=True)
+        object_types = data["object_types"]
         print("OBJECT TYPES: ", object_types)
-        print("file idx: %d" % rand_file_idx)
+        print("file %d idx: %d" % (sample_i, rand_file_idx))
         expert_traj = data["states"]
         T = expert_traj.shape[0]
         goal_radius = data["goal_radius"].item()
@@ -562,23 +566,23 @@ if __name__ == '__main__':
             lmbda = 0.9
             print(
                 f"Using RLS(alpha_{alpha}_lmbda_{lmbda}) to adapt object features.")
-            save_res_dir = f"eval_adaptation_results/RLS(alpha_{alpha}_lmbda_{lmbda})_fixed_init"
+            save_res_dir = f"eval_adaptation_results/RLS(alpha_{alpha}_lmbda_{lmbda})"
             rls = RLS(alpha=alpha, lmbda=lmbda)
             adaptation_func = lambda *args, **kwargs: perform_adaptation_rls(
                 rls=rls, is_3D=train_args["is_3D"],
                 detached_steps=not opt_args.connected_steps, *args, **kwargs)
         elif opt_args.use_learn2learn:
             print("Using Learn2Learn to adapt object features.")
-            save_res_dir = f"eval_adaptation_results/learn2learn_group_train_dot_prod_eval_L2"
+            save_res_dir = f"eval_adaptation_results/learn2learn_group"
             learned_opts = LearnedOptimizerGroup(
                 pos_opt_path=os.path.join(
-                    Params.model_root, "learned_opt_pos_pref_rand_init_20_unroll_3_redo2_dot_prod"),
+                    Params.model_root, "learned_opt_pos_pref_rand_init_20_unroll_3_detached_rollout"),
                 rot_opt_path=os.path.join(
                     Params.model_root, "learned_opt_rot_pref_rand_init_30_unroll_2"),
                 rot_offset_opt_path=os.path.join(
                     Params.model_root, "learned_opt_rot_offset_rand_init_30_unroll_2"),
                 device=DEVICE,
-                pos_epoch=3, rot_epoch=4, rot_offset_epoch=3)
+                pos_epoch=4, rot_epoch=4, rot_offset_epoch=3)
             adaptation_func = lambda *args, **kwargs: perform_adaptation_learn2learn_group(
                 learned_opts=learned_opts, is_3D=train_args["is_3D"],
                 detached_steps=not opt_args.connected_steps,
@@ -613,7 +617,7 @@ if __name__ == '__main__':
                 Optimizer=torch.optim.Adam, optim_params=optim_params,
                 detached_steps=not opt_args.connected_steps,
                 is_3D=train_args["is_3D"], *args, **kwargs)
-            save_res_dir = "eval_adaptation_results/Adam_detached"
+            save_res_dir = "eval_adaptation_results/Adam"
 
         if save_res_dir is not None:
             if opt_args.calc_pos:
@@ -622,6 +626,17 @@ if __name__ == '__main__':
                 save_res_dir += "_rot"
             if opt_args.is_rot_ignore:
                 save_res_dir += "_ignore"
+
+            if opt_args.use_rand_init:
+                save_res_dir += "_rand_init"
+            else:
+                save_res_dir += "_fixed_init"
+
+            if opt_args.connected_steps:
+                save_res_dir += "_connected_steps"
+            else:
+                save_res_dir += "_detached_steps"
+
             os.makedirs(f"{save_res_dir}/samples", exist_ok=True)
             log_file = open(f"{save_res_dir}/qualitative_output.txt", "w")
         else:
@@ -630,3 +645,7 @@ if __name__ == '__main__':
         viz_adaptation(policy, opt_args.num_updates, test_data_root,
                        train_pos=opt_args.calc_pos, train_rot=opt_args.calc_rot,
                        adaptation_func=adaptation_func, is_rot_ignore=opt_args.is_rot_ignore, save_res_dir=f"{save_res_dir}/samples", log_file=log_file, use_rand_init=opt_args.use_rand_init)
+
+        # Save opt args as json file
+        with open(f"{save_res_dir}/opt_args.json", "w") as f:
+            json.dump(opt_args.__dict__, f, indent=4)
