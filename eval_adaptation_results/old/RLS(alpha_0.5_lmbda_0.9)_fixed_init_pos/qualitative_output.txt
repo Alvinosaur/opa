@@ -1,0 +1,4 @@
+Target params: [1.1812, 0.2779]
+Actual params: [0.5941, 0.5941]
+-Original Grad: 0.496, -lr * Pred Grad:  0.394, New P: 0.988
+-Original Grad: 0.279, -lr * Pred Grad:  0.317, New P: 0.911
