@@ -63,8 +63,9 @@ def eval_performance_pos(policy: Policy, dataset, dstep, use_dot_prod=False):
     np.random.shuffle(indices)
     # num_batches = len(dataset) // batch_size
     num_batches = 20
-
+    total_samples = 0.0
     total_loss = 0.0
+
     for b in range(num_batches):
         batch_indices = indices[b * batch_size:(b + 1) * batch_size]
         batch_data = load_batch(dataset, batch_indices)
@@ -83,8 +84,9 @@ def eval_performance_pos(policy: Policy, dataset, dstep, use_dot_prod=False):
                                           train_pos=True, train_rot=False,
                                           goal_pos_radius_scale=1.0)
         total_loss += loss * len(batch_indices)
+        total_samples += len(batch_indices)
 
-    return total_loss / len(dataset)
+    return total_loss / total_samples
 
 
 def eval_performance_rot(policy: Policy, dataset, dstep, care_rot):
@@ -110,6 +112,7 @@ def eval_performance_rot(policy: Policy, dataset, dstep, care_rot):
     np.random.shuffle(indices)
     num_batches = min(20, int(np.ceil(len(indices) / batch_size)))
 
+    total_samples = 0.0
     total_loss = 0.0
     for b in range(num_batches):
         batch_indices = indices[b * batch_size:(b + 1) * batch_size]
@@ -122,48 +125,10 @@ def eval_performance_rot(policy: Policy, dataset, dstep, care_rot):
                                               train_pos=False, train_rot=True,
                                               goal_pos_radius_scale=1.0)
 
-            # (start_tensors, current_inputs, goal_tensors, goal_rot_inputs, object_inputs, obj_idx_tensors, _, _,
-            #  traj_tensors) = batch_data_processed
-
-            # start = start_tensors.cpu().numpy()[0]
-            # start = np.concatenate(
-            #     [start[:2], decode_ori(start[2:]).flatten()])
-            # current = current_inputs.cpu().numpy()[0]
-            # goal = goal_tensors.cpu().numpy()[0]
-            # goal = np.concatenate(
-            #     [goal[:2], decode_ori(goal[2:]).flatten()])
-            # object_types = obj_idx_tensors.cpu().numpy()[0]
-            # pred_traj = np.hstack([
-            #     pred_traj.cpu().numpy()[0, :, :2],
-            #     decode_ori(pred_traj.cpu().numpy()[0, :, 2:])
-            # ])
-            # expert_traj = np.hstack([
-            #     traj_tensors.cpu().numpy()[0, :, :2],
-            #     decode_ori(traj_tensors.cpu().numpy()[0, :, 2:])
-            # ])
-
-            # object_poses = object_inputs[0, 0, :, :4].cpu().numpy()
-            # object_poses = np.hstack([object_poses[:, :2],
-            #                           decode_ori(object_poses[:, 2:])])
-            # object_radii = object_inputs[0, 0, :, -1].cpu().numpy()
-            # theta_offsets = Params.ori_offsets_2D[object_types]
-            # objects = [
-            #     Object(pos=object_poses[i][0:2], radius=object_radii[i],
-            #            ori=object_poses[i][-1] + theta_offsets[i]) for i in range(len(object_types))
-            # ]
-
-            # fig, ax = plt.subplots(1, 1, figsize=(10, 10))
-            # draw(ax, start_pose=start, goal_pose=goal,
-            #      goal_radius=Params.agent_radius, agent_radius=Params.agent_radius,
-            #      object_types=object_types, offset_objects=objects,
-            #      pred_traj=pred_traj, expert_traj=expert_traj,
-            #      title="test", show_rot=True, hold=True)
-
-            # break
-
         total_loss += loss * len(batch_indices)
+        total_samples += len(batch_indices)
 
-    return total_loss / len(dataset)
+    return total_loss / total_samples
 
 
 def run_evaluation():
@@ -225,8 +190,8 @@ def run_evaluation():
     for i in range(num_steps):
         for j in range(num_steps):
             # Reset the attract and repel features separately
-            obj_pos_feats = [pos_feats_linspace[i],
-                             pos_feats_linspace[j]]  # Repel, Attract objs
+            obj_pos_feats = [pos_attract_feat,
+                             pos_repel_feat]  # Repel, Attract objs
             obj_rot_feats = [rot_care_feat] * 2
             obj_rot_offsets = [rot_offset_start] * 2  # alias fine, pure eval
             policy.update_obj_feats(
@@ -234,6 +199,7 @@ def run_evaluation():
 
             pos_loss = eval_performance_pos(policy=policy, dataset=pos_dataset,
                                             dstep=dstep, use_dot_prod=False)
+            print(pos_loss)
             param_loss_data[i][j] = (
                 pos_feats_linspace[i].item(), pos_feats_linspace[j].item(), pos_loss.item())
             pbar.update(1)
