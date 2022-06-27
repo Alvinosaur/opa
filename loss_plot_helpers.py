@@ -57,7 +57,9 @@ def plot_2d_contour(x, y, Z, title, vmin=0.1, vmax=10, vlevel=0.5, show=False,
     fig = plt.figure()
     ax = Axes3D(fig)
     surf = ax.plot_surface(X, Y, Z, cmap=cm.coolwarm,
-                           linewidth=0, antialiased=False)
+                           linewidth=0, antialiased=False,
+                           rstride=1, cstride=1, edgecolor='none', alpha=0.5)
+
     plt.xlabel(xlabel)
     plt.ylabel(ylabel)
     ax.set_zlabel('loss')

@@ -3,29 +3,30 @@ import numpy as np
 import warnings
 
 
-def fftPlot(sig, dt=None, plot=True):
+def fftPlot(sig, dt=None, ts=None, plot=True, title='Analytic FFT plot'):
     """
     Taken from https://stackoverflow.com/a/53925342
     """
     # Here it's assumes analytic signal (real signal...) - so only half of the axis is required
 
-    if dt is None:
-        dt = 1
-        t = np.arange(0, sig.shape[-1])
-        xLabel = 'samples'
-    else:
-        t = np.arange(0, sig.shape[-1]) * dt
-        xLabel = 'freq [Hz]'
+    if ts is None:
+        if dt is None:
+            dt = 1
+            ts = np.arange(0, sig.shape[-1])
+            xLabel = 'samples'
+        else:
+            ts = np.arange(0, sig.shape[-1]) * dt
+            xLabel = 'freq [Hz]'
 
     if sig.shape[0] % 2 != 0:
         warnings.warn("signal preferred to be even in size, autoFixing it...")
-        t = t[0:-1]
+        ts = ts[0:-1]
         sig = sig[0:-1]
 
     # Divided by size t for coherent magnitude
-    sigFFT = np.fft.fft(sig) / t.shape[0]
+    sigFFT = np.fft.fft(sig) / ts.shape[0]
 
-    freq = np.fft.fftfreq(t.shape[0], d=dt)
+    freq = np.fft.fftfreq(ts.shape[0], d=dt)
 
     # Plot analytic signal - right half of frequence axis needed only...
     firstNegInd = np.argmax(freq < 0)
@@ -38,7 +39,7 @@ def fftPlot(sig, dt=None, plot=True):
         plt.plot(freqAxisPos, np.abs(sigFFTPos))
         plt.xlabel(xLabel)
         plt.ylabel('mag')
-        plt.title('Analytic FFT plot')
+        plt.title(title)
         plt.show()
 
     return sigFFTPos, freqAxisPos

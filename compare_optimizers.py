@@ -39,6 +39,8 @@ samples_files = [
 datasets = ["pos_2D_test", "rot_2D_test", "rot_2D_test"]
 sampled_file_idxs = np.load(f"eval_adaptation_results/{samples_files[case]}")
 for sample_i, file_idx in enumerate(sampled_file_idxs):
+    if sample_i <= 0:
+        continue
     data = np.load(os.path.join("data", datasets[case], "traj_%d.npz" %
                                 file_idx), allow_pickle=True)
     object_types = data["object_types"]
@@ -71,38 +73,34 @@ for sample_i, file_idx in enumerate(sampled_file_idxs):
     expert_traj_xy = expert_traj[:, :2]
 
     # Use PCA to extract principal axis, align trajectory to principal axis
-    pca = PCA(n_components=2)
+    pca = PCA(n_components=1)
     pca.fit(expert_traj_xy)
     major_axis = pca.components_[0]
-    minor_axis = pca.components_[1]
     midpoint = np.mean(expert_traj_xy, axis=0)
-    dist_start = np.linalg.norm(expert_traj_xy[0] - midpoint)
-    dist_end = np.linalg.norm(expert_traj_xy[-1] - midpoint)
-    new_start_major = np.mean(expert_traj_xy, axis=0) - major_axis * dist_start
-    new_end_major = np.mean(expert_traj_xy, axis=0) + major_axis * dist_end
-    new_start_minor = np.mean(expert_traj_xy, axis=0) - minor_axis * dist_start
-    new_end_minor = np.mean(expert_traj_xy, axis=0) + minor_axis * dist_end
-    ax.plot([new_start_minor[0], new_end_minor[0]],
-            [new_start_minor[1], new_end_minor[1]])
-    draw(ax, start_pose=start, goal_pose=goal,
-         goal_radius=goal_radius, agent_radius=Params.agent_radius,
-         object_types=object_types, offset_objects=objects,
-         pred_traj=np.vstack([new_start_major, new_end_major]), expert_traj=expert_traj,
-         show_rot=train_rot, hold=True)
-    # ax.plot(expert_traj_xy[:, 0], expert_traj_xy[:, 1])
-    # ax.plot([start[0], new_end[0]], [start[1], new_end[1]])
-    # plt.show()
-
     ang = np.arctan2(major_axis[1], major_axis[0])
     R = np.array([[np.cos(ang), -np.sin(ang)],
                   [np.sin(ang), np.cos(ang)]])
-    traj_aligned = np.dot(expert_traj_xy, R.T)
 
-    mag_alignment = expert_traj_xy @ major_axis
+    major_axis_start = midpoint + major_axis * \
+        np.linalg.norm(expert_traj_xy[0] - midpoint)
+    major_axis_end = midpoint - major_axis * \
+        np.linalg.norm(expert_traj_xy[-1] - midpoint)
+    draw(ax, start_pose=start, goal_pose=goal,
+         goal_radius=goal_radius, agent_radius=Params.agent_radius,
+         object_types=object_types, offset_objects=objects,
+         pred_traj=np.vstack([major_axis_start[np.newaxis],
+                              major_axis_end[np.newaxis],
+                              ]),
+         expert_traj=expert_traj,
+         show_rot=train_rot, hold=True)
+    # normalize to be zero-centered and undo rotation of major axis
+    traj_aligned = np.dot(expert_traj_xy - midpoint, R)
+
     plt.clf()
     plt.plot(traj_aligned[:, 0], traj_aligned[:, 1], "k-")
     plt.show()
-    import ipdb
-    ipdb.set_trace()
-    xmag, xfreq = fftPlot(expert_traj_xy[:, 0], dt=1, title="X FFT")
-    ymag, yfreq = fftPlot(expert_traj_xy[:, 1], dt=1, title="Y FFT")
+    plt.tight_layout()
+    xmag, xfreq = fftPlot(traj_aligned[:, 1], dt=1, title="Overall FFT")
+    fig, ax = plt.subplots()
+    # xmag, xfreq = fftPlot(expert_traj_xy[:, 0], dt=1, title="X FFT")
+    # ymag, yfreq = fftPlot(expert_traj_xy[:, 1], dt=1, title="Y FFT")

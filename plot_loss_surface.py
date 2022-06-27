@@ -1,10 +1,10 @@
-from socket import IP_DROP_MEMBERSHIP
-from typing import *
 import numpy as np
 import matplotlib.pyplot as plt
+from matplotlib import cm
 from tqdm import tqdm
 import os
 import json
+import argparse
 
 import torch
 
@@ -246,7 +246,7 @@ def plot_evaluation(loss_folder=None, traj_idx=None, is_pos=True):
 
     # # Position
     if is_pos:
-        loss_data_path = "param_loss_data_pos_cos_sim.npy"
+        loss_data_path = "param_loss_data_pos.npy"
         data = np.load(loss_data_path)
         y = np.array([data[i][0][0] for i in range(len(data))])  # repel
         x = np.array([data[0][j][1] for j in range(len(data[0]))])   # attract
@@ -260,7 +260,7 @@ def plot_evaluation(loss_folder=None, traj_idx=None, is_pos=True):
                         vmax=10, vlevel=0.5, show=False,
                         xlabel='Attract Feature', ylabel='Repel Feature')
 
-        if loss_folder is not None:
+        if loss_folder is not None and traj_idx is not None:
             pref_params = np.load(os.path.join(
                 loss_folder, "actual_params.npy"))
             sample_loss = np.load(os.path.join(
@@ -270,8 +270,12 @@ def plot_evaluation(loss_folder=None, traj_idx=None, is_pos=True):
             ax = plt.gca()
             repel_params = pref_params[traj_idx, :, 0]
             attract_params = pref_params[traj_idx, :, 1]
-            ax.plot(attract_params, repel_params,
-                    sample_loss[traj_idx, :], '-o', color='red')
+
+            T = attract_params.shape[0]
+            for t in range(T):
+                ax.plot(attract_params[t:t + 2], repel_params[t:t + 2],
+                        sample_loss[traj_idx, t:t + 2], 'o', alpha=0.9,
+                        color=cm.jet(t / T))
 
         plt.show()
 
@@ -301,6 +305,12 @@ def plot_evaluation(loss_folder=None, traj_idx=None, is_pos=True):
 
 
 if __name__ == "__main__":
-    run_evaluation()
-    # plot_evaluation(
-    #     loss_folder="eval_adaptation_results/Adam_pos_fixed_init_detached_steps", traj_idx=0)
+    parser = argparse.ArgumentParser()
+    parser.add_argument('--traj_idx', action='store', type=int)
+    args = parser.parse_args()
+    # run_evaluation()
+    # opt_fname = "Adam_pos_fixed_init_detached_steps"
+    opt_fname = "learn2learn_group_pos_fixed_init_detached_steps"
+    # opt_fname = "RLS(alpha_0.5_lmbda_0.9)_pos_fixed_init_detached_steps"
+    plot_evaluation(
+        loss_folder=f"eval_adaptation_results/{opt_fname}", traj_idx=args.traj_idx)

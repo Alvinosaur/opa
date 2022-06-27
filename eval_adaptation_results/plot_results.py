@@ -5,14 +5,14 @@ import matplotlib.pyplot as plt
 import re
 
 
-model = "Adam"
+model = "RLS"
 descript = "fixed_init_detached_steps"
 
 if model == "LSTM":
-    model_name = "learn2learn_group_diff_init"
-    model_title = "Learn2Learn_diff_init"
+    model_name = "learn2learn_group"
+    model_title = "Learn2Learn"
 elif model == "RLS":
-    alpha = 0.5
+    alpha = 0.1
     lmbda = 0.9
     model_name = "RLS(alpha_%.1f_lmbda_%.1f)" % (
         alpha, lmbda)
@@ -27,7 +27,7 @@ elif model == "SGD":
 else:
     raise NotImplementedError
 
-# num_steps = 32  # [0, ..., 31]
+# num_steps = 31  # [0, ..., 31]
 num_steps = 21
 # num_samples = 10  # only show first 10 samples for clarity
 
@@ -40,8 +40,8 @@ data_type = "pos repel"
 # data_type = "rot pref"
 # data_type = "rot offset"
 
-# root_folder = "/home/alvin/research/intelligent_control_lab/human_robot_interaction/opa"
-root_folder = "/home/ashek/research/hri/opa"
+root_folder = "/home/alvin/research/intelligent_control_lab/human_robot_interaction/opa"
+# root_folder = "/home/ashek/research/hri/opa"
 
 folder = "%s/eval_adaptation_results/%s_%s_%s" % (
     root_folder, model_name, data_name, descript)
@@ -84,13 +84,14 @@ orig_grads = [float(i) for i, _, _ in matches]
 pred_grads = [float(i) for _, i, _ in matches]
 orig_grad_offset = pred_grad_offset = None
 
+# [rot pref, rot offset gradients] or [pos repel, pos attract gradients]
 if data_name in ["rot", "rot_ignore"]:
     orig_grad_pref = np.array(orig_grads[0::2])
     pred_grad_pref = np.array(pred_grads[0::2])
     if data_type == "rot offset":
         orig_grad_offset = np.array(orig_grads[1::2])
         pred_grad_offset = np.array(pred_grads[1::2])
-else:
+else:  # Position
     if data_type == "pos repel":
         orig_grad_pref = np.array(orig_grads[0::2])
         pred_grad_pref = np.array(pred_grads[0::2])
