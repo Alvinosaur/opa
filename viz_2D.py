@@ -374,7 +374,7 @@ def viz_main(policy: Policy, test_data_root: str, calc_pos, calc_rot):
                    objects=objects, expert_traj=expert_traj, ax=ax, viz_args=viz_args)
 
 
-def viz_adaptation(policy: Policy, num_updates, test_data_root: str, train_pos, train_rot, is_rot_ignore, adaptation_func, use_rand_init, save_res_dir=None, log_file=None):
+def viz_adaptation(policy: Policy, num_updates, test_data_root: str, train_pos, train_rot, is_rot_ignore, adaptation_func, use_rand_init, save_res_dir=None, log_file=None, skip_drawing=False):
     """
     Visually evalutes 2D policy with varying number of adaptation steps, where
     adaptation is performed directly on expert data.
@@ -392,7 +392,7 @@ def viz_adaptation(policy: Policy, num_updates, test_data_root: str, train_pos, 
     num_updates_series = list(range(num_updates + 1))
 
     # First randomly sample N data samples
-    N = 30
+    N = 100
     seen = set()
     sampled_file_idxs = []
     while len(sampled_file_idxs) < N:
@@ -411,6 +411,12 @@ def viz_adaptation(policy: Policy, num_updates, test_data_root: str, train_pos, 
         if rand_file_idx not in seen:
             seen.add(rand_file_idx)
             sampled_file_idxs.append(rand_file_idx)
+    if train_rot:
+        np.save(os.path.join("eval_adaptation_results",
+                             "sampled_file_idxs_rot.npy"), sampled_file_idxs)
+    else:
+        np.save(os.path.join("eval_adaptation_results",
+                             "sampled_file_idxs_pos.npy"), sampled_file_idxs)
 
     # Evaluate policy and adaptation on sampled data
     sample_i = 0
@@ -484,6 +490,9 @@ def viz_adaptation(policy: Policy, num_updates, test_data_root: str, train_pos, 
                                         verbose=True, clip_params=False, ret_trajs=True, log_file=log_file)
         pred_trajs = np.vstack(pred_trajs)
 
+        if skip_drawing:
+            continue
+
         for update_i in num_updates_series:
             pred_traj = pred_trajs[update_i]
 
@@ -530,6 +539,8 @@ def parse_arguments():
                         help="Preserve gradient between iterative rollout steps")
     parser.add_argument('--learn2learn_name', action='store',
                         type=str, help="trained learned optimizer")
+    parser.add_argument('--skip_drawing', action='store_true',
+                        help="don't render any plots")
     return parser.parse_args()
 
 
@@ -637,6 +648,7 @@ if __name__ == '__main__':
             else:
                 save_res_dir += "_detached_steps"
 
+            print("Saving to: ", save_res_dir)
             os.makedirs(f"{save_res_dir}/samples", exist_ok=True)
             log_file = open(f"{save_res_dir}/qualitative_output.txt", "w")
         else:
@@ -644,7 +656,8 @@ if __name__ == '__main__':
 
         viz_adaptation(policy, opt_args.num_updates, test_data_root,
                        train_pos=opt_args.calc_pos, train_rot=opt_args.calc_rot,
-                       adaptation_func=adaptation_func, is_rot_ignore=opt_args.is_rot_ignore, save_res_dir=f"{save_res_dir}/samples", log_file=log_file, use_rand_init=opt_args.use_rand_init)
+                       adaptation_func=adaptation_func, is_rot_ignore=opt_args.is_rot_ignore, save_res_dir=f"{save_res_dir}/samples", log_file=log_file, use_rand_init=opt_args.use_rand_init,
+                       skip_drawing=opt_args.skip_drawing)
 
         # Save opt args as json file
         with open(f"{save_res_dir}/opt_args.json", "w") as f:

@@ -12,5 +12,6 @@
     "use_rand_init": false,
     "use_learn2learn": false,
     "connected_steps": false,
-    "learn2learn_name": null
+    "learn2learn_name": null,
+    "skip_drawing": true
 }

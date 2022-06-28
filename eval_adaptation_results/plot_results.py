@@ -5,14 +5,14 @@ import matplotlib.pyplot as plt
 import re
 
 
-model = "RLS"
+model = "LSTM"
 descript = "fixed_init_detached_steps"
 
 if model == "LSTM":
     model_name = "learn2learn_group"
     model_title = "Learn2Learn"
 elif model == "RLS":
-    alpha = 0.1
+    alpha = 0.5
     lmbda = 0.9
     model_name = "RLS(alpha_%.1f_lmbda_%.1f)" % (
         alpha, lmbda)

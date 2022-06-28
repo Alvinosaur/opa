@@ -134,7 +134,7 @@ def eval_performance_rot(policy: Policy, dataset, dstep, care_rot):
 def run_evaluation():
     model_name = "policy_2D"
     loaded_epoch = 100
-    num_steps = 20
+    num_steps = 70
     dstep = Params.dstep_2D
 
     with open(os.path.join(Params.model_root, model_name, "train_args_pt_1.json"), "r") as f:
@@ -190,8 +190,8 @@ def run_evaluation():
     for i in range(num_steps):
         for j in range(num_steps):
             # Reset the attract and repel features separately
-            obj_pos_feats = [pos_attract_feat,
-                             pos_repel_feat]  # Repel, Attract objs
+            obj_pos_feats = [pos_feats_linspace[i],
+                             pos_feats_linspace[j]]  # Repel, Attract objs
             obj_rot_feats = [rot_care_feat] * 2
             obj_rot_offsets = [rot_offset_start] * 2  # alias fine, pure eval
             policy.update_obj_feats(
@@ -199,7 +199,6 @@ def run_evaluation():
 
             pos_loss = eval_performance_pos(policy=policy, dataset=pos_dataset,
                                             dstep=dstep, use_dot_prod=False)
-            print(pos_loss)
             param_loss_data[i][j] = (
                 pos_feats_linspace[i].item(), pos_feats_linspace[j].item(), pos_loss.item())
             pbar.update(1)

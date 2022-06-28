@@ -232,8 +232,6 @@ def perform_adaptation(policy: Policy, batch_data: List[Tuple],
         losses: List of losses for each adaptation iteration
         pred_traj: Predicted trajectory for final adaptation iteration
     """
-    import ipdb
-    ipdb.set_trace()
     batch_data_processed = process_batch_data(
         batch_data, train_rot=None, n_samples=None, is_full_traj=True)
     logger = Logger(log_file)
