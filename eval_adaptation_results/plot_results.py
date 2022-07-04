@@ -35,8 +35,8 @@ data_name = "pos"
 # data_name = "rot"
 # data_name = "rot_ignore"
 
-# data_type = "pos attract"
-data_type = "pos repel"
+data_type = "pos attract"
+# data_type = "pos repel"
 # data_type = "rot pref"
 # data_type = "rot offset"
 
@@ -193,10 +193,10 @@ for sample_i in range(num_samples_to_plot):
                  label="-1 * Pred Grad Rot Offset", color="tab:orange")
 
     # Plot losses
-    ax1.plot(ts[:-1], iter_losses[grad_i:grad_i +
-             num_steps - 1, 1], color="black")
+    ax1.plot(ts, iter_losses[grad_i:grad_i +
+             num_steps, 1], color="black")
 
-    grad_i += num_steps - 1
+    grad_i += num_steps
 
 for x in vlines:
     ax0.axvline(x=x, linestyle="dashed", color="black", alpha=0.3)
