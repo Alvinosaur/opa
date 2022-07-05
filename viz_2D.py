@@ -374,7 +374,7 @@ def viz_main(policy: Policy, test_data_root: str, calc_pos, calc_rot):
                    objects=objects, expert_traj=expert_traj, ax=ax, viz_args=viz_args)
 
 
-def viz_adaptation(policy: Policy, num_updates, test_data_root: str, train_pos, train_rot, is_rot_ignore, adaptation_func, use_rand_init, save_res_dir=None, log_file=None, skip_drawing=False):
+def viz_adaptation(policy: Policy, num_updates, test_data_root: str, train_pos, train_rot, is_rot_ignore, adaptation_func, use_rand_init, save_res_dir=None, log_file=None, skip_drawing=False, add_noise=False):
     """
     Visually evalutes 2D policy with varying number of adaptation steps, where
     adaptation is performed directly on expert data.
@@ -392,7 +392,7 @@ def viz_adaptation(policy: Policy, num_updates, test_data_root: str, train_pos, 
     num_updates_series = list(range(num_updates + 1))
 
     # First randomly sample N data samples
-    N = 100
+    N = 30
     seen = set()
     sampled_file_idxs = []
     while len(sampled_file_idxs) < N:
@@ -446,6 +446,18 @@ def viz_adaptation(policy: Policy, num_updates, test_data_root: str, train_pos, 
         #               object_radii[np.newaxis, :, np.newaxis].repeat(
         #                   T, axis=0),  # repeat for T timesteps
         #               object_idxs)
+
+        noise_traj = np.zeros_like(expert_traj)
+        if add_noise:
+            if train_rot:
+                rot_noise_traj = np.random.normal(
+                    0, np.deg2rad(15), size=(T, 1))
+                noise_traj[:, -1] = rot_noise_traj.flatten()
+            else:
+                pos_noise_traj = np.random.normal(0, 0.2, size=(T, POS_DIM))
+                noise_traj[:, :-1] = pos_noise_traj
+
+            expert_traj += noise_traj
 
         batch_data = (expert_traj, np.array([goal_radius]),
                       # repeat for T timesteps unless object can move
@@ -531,6 +543,8 @@ def parse_arguments():
                         help="Use vanilla SGD to adapt object features.")
     parser.add_argument('--use_rls', action='store_true',
                         help="Use rls to adapt object features.")
+    parser.add_argument('--add_noise', action='store_true',
+                        help="Add noise expert trajectory.")
     parser.add_argument('--use_rand_init', action='store_true',
                         help="Randomly init object features.")
     parser.add_argument('--use_learn2learn', action='store_true',
@@ -648,6 +662,9 @@ if __name__ == '__main__':
             else:
                 save_res_dir += "_detached_steps"
 
+            if opt_args.add_noise:
+                save_res_dir += "_noise"
+
             print("Saving to: ", save_res_dir)
             os.makedirs(f"{save_res_dir}/samples", exist_ok=True)
             log_file = open(f"{save_res_dir}/qualitative_output.txt", "w")
@@ -657,7 +674,7 @@ if __name__ == '__main__':
         viz_adaptation(policy, opt_args.num_updates, test_data_root,
                        train_pos=opt_args.calc_pos, train_rot=opt_args.calc_rot,
                        adaptation_func=adaptation_func, is_rot_ignore=opt_args.is_rot_ignore, save_res_dir=f"{save_res_dir}/samples", log_file=log_file, use_rand_init=opt_args.use_rand_init,
-                       skip_drawing=opt_args.skip_drawing)
+                       skip_drawing=opt_args.skip_drawing, add_noise=opt_args.add_noise)
 
         # Save opt args as json file
         with open(f"{save_res_dir}/opt_args.json", "w") as f:

@@ -311,5 +311,8 @@ if __name__ == "__main__":
     # opt_fname = "Adam_pos_fixed_init_detached_steps"
     opt_fname = "learn2learn_group_pos_fixed_init_detached_steps"
     # opt_fname = "RLS(alpha_0.5_lmbda_0.9)_pos_fixed_init_detached_steps"
+
+    prefix = "_noise_full_traj"
+    opt_fname += prefix
     plot_evaluation(
         loss_folder=f"eval_adaptation_results/{opt_fname}", traj_idx=args.traj_idx)

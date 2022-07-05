@@ -5,8 +5,9 @@ import matplotlib.pyplot as plt
 import re
 
 
-model = "LSTM"
+model = "Adam"
 descript = "fixed_init_detached_steps"
+descript += "_noise"
 
 if model == "LSTM":
     model_name = "learn2learn_group"
@@ -40,8 +41,8 @@ data_type = "pos attract"
 # data_type = "rot pref"
 # data_type = "rot offset"
 
-root_folder = "/home/alvin/research/intelligent_control_lab/human_robot_interaction/opa"
-# root_folder = "/home/ashek/research/hri/opa"
+# root_folder = "/home/alvin/research/intelligent_control_lab/human_robot_interaction/opa"
+root_folder = "/home/ashek/research/hri/opa"
 
 folder = "%s/eval_adaptation_results/%s_%s_%s" % (
     root_folder, model_name, data_name, descript)

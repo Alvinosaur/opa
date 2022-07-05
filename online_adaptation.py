@@ -256,7 +256,8 @@ def perform_adaptation(policy: Policy, batch_data: List[Tuple],
         logger.update(policy, batch_data_processed, train_pos=train_pos,
                       train_rot=train_rot, dstep=dstep, params=params)
         if detached_steps:
-            n_samples = np.Inf  # use all timesteps of traj
+            # n_samples = np.Inf  # use all timesteps of traj
+            n_samples = 32
             pos_loss, rot_loss = batch_inner_loop(model=policy.policy_network,
                                                   batch_data=batch_data, train_rot=train_rot, is_3D=is_3D, n_samples=n_samples, is_training=False)
             loss = pos_loss + rot_loss
@@ -338,6 +339,7 @@ def perform_adaptation_rls(policy: Policy, rls: RLS, batch_data: List[Tuple],
                 pred_ori = torch.zeros(
                     (pred_trans.shape[0], rot_dim), device=DEVICE)
             pred_traj = torch.cat([pred_trans, pred_ori], dim=-1).unsqueeze(0)
+            out_T = pred_traj.shape[0]
             traj_tensors = traj_tensors.unsqueeze(0)
 
         else:
@@ -368,8 +370,10 @@ def perform_adaptation_rls(policy: Policy, rls: RLS, batch_data: List[Tuple],
 
         # RLS is slow, so only calculate loss for subset of traj
         error = torch.norm(y - yhat, dim=2)[0]
-        rand_indices = torch.argsort(error, descending=True)[:10]
-        # rand_indices = torch.randint(low=0, high=out_T, size=(15,))
+        # rand_indices = torch.arange(0, error.shape[0])
+        # rand_indices = torch.argsort(error, descending=True)[:64]
+        n_samples = 32
+        rand_indices = torch.randint(low=0, high=out_T, size=(n_samples,))
         y_sampled = y[:, rand_indices, :]
         yhat_sampled = yhat[:, rand_indices, :]
         # y_sampled = y
@@ -491,7 +495,10 @@ def perform_adaptation_learn2learn_group(policy: Policy, learned_opts, batch_dat
                       train_rot=train_rot, dstep=dstep, params=params)
 
         if detached_steps:
-            n_samples = np.Inf
+            # n_samples = np.Inf
+            n_samples = 32
+            import ipdb
+            ipdb.set_trace()
             pos_loss, rot_loss = batch_inner_loop(model=policy.policy_network,
                                                   batch_data=batch_data, train_rot=train_rot, is_3D=is_3D, n_samples=n_samples, is_training=False)
             loss = pos_loss + rot_loss
