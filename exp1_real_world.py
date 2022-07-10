@@ -8,9 +8,12 @@ import os
 import argparse
 import ipdb
 import json
+import typing
+from pynput import keyboard
 
 import rospy
-from hri_tasks_msgs.msg import PoseSync
+from geometry_msgs.msg import PoseStamped
+from std_msgs.msg import Bool
 
 from scipy.spatial.transform import Rotation as R
 from scipy.spatial.transform import Slerp
@@ -23,62 +26,69 @@ from data_params import Params
 from exp_params import *
 from exp_utils import *
 from elastic_band import Object
-from viz_3D import Viz3DROSPublisher
+from viz_3D import Viz3DROSPublisher, pose_to_msg, msg_to_pose
 from kinova_robot import KinovaRobot
+from exp1_cup_low_table_sim import robot_table_surface_projections
 
+World2Net = 10.0
+Net2World = 1 / World2Net
 
-Net2World = 1.0
-World2Net = 1 / Net2World
-
-# TODO: Custom experiment parameters
-num_objects = 5
-dstep = 0.075
-object_radii = np.array([2.0] * num_objects)
+ee_min_pos_world = np.array([0.23, -0.375, -0.1])
+ee_max_pos_world = np.array([0.725, 0.55, 0.35])
+# table_bounds: [(minx, maxx, miny, maxy), ]
+table_bounds_world = [(ee_min_pos_world[0], ee_max_pos_world[0], 
+                       ee_min_pos_world[1], ee_max_pos_world[1])]
+table_height_world = -0.1
+num_objects = 1
+object_radii = np.array([4.0] * num_objects)  # defined on net scale
 goal_rot_radius = np.array([1.5])
-goal_pos_world = np.array([5, 5, 5])
+goal_pos_world = np.array([0.4, -0.271, 0.18])
+goal_ori_quat = np.array([-0.6979, -0.7149, 0.0265, 0.0311])
+start_pos_world = np.array([0.4, 0.425, 0.18])
+start_ori_quat = np.array([-0.6979, -0.7149, 0.0265, 0.0311])
 obstacles = []
+
 # Need more adaptation steps because this example is more difficult
 custom_num_pos_net_updates = 20
 custom_num_rot_net_updates = 30
 
 # Global info updated by callbacks
-cur_joints, cur_pos_world, cur_ori = None, None, None
-intervene_robot_poses = []
+cur_pos_world, cur_ori_quat = None, None
+perturb_pos_traj_world = []
 intervene_object_poses = [[] for _ in range(num_objects)]
 object_pos_world = np.zeros((num_objects, 3))  # updated by callbacks
-object_oris = np.array([0, 0, 0, 1.]).view(1, 1).repeat(num_objects, axis=0)
+object_oris = np.array([0, 0, 0, 1.])[np.newaxis].repeat(num_objects, axis=0)
 is_intervene = False
 need_update = False
 
+DEBUG = False
+if DEBUG:
+    dstep = 0.01
+else:
+    dstep = 0.15
 
-def is_intervene_cb(msg):
-    if is_intervene == msg.is_intervene:
-        return
-    elif is_intervene:
-        print("Intervene ended")
-        need_update = True
-    else:
-        print("Intervene started")
 
-    is_intervene = msg.is_intervene
-
+def is_intervene_cb(key):
+    global is_intervene, need_update
+    if key == keyboard.Key.space:
+        is_intervene = not is_intervene
+        if not is_intervene:  # True -> False, end of intervention
+            need_update = True
 
 def obj_pose_cb(msg):
     # TODO:
+    global is_intervene
     if is_intervene:
         pass
 
-
 def robot_pose_cb(msg):
-    cur_pos_world = np.array(msg.pose.position)
-    cur_ori = np.array(msg.pose.orientation)
-    if is_intervene:
-        intervene_robot_poses.append((cur_pos_world, cur_ori))
-
-
-def robot_joints_cb(msg):
-    cur_joints = np.array(msg.joints)
-
+    global is_intervene, cur_pos_world, cur_ori_quat, perturb_pos_traj_world, DEBUG
+    pose = msg_to_pose(msg)
+    if not DEBUG:
+        cur_pos_world = pose[0:3]
+        cur_ori_quat = pose[3:]
+        if is_intervene:
+            perturb_pos_traj_world.append((cur_pos_world, cur_ori_quat))
 
 def parse_arguments():
     parser = argparse.ArgumentParser()
@@ -94,35 +104,30 @@ def parse_arguments():
 
     return args
 
-
-def main():
-    global object_pos_world
+if __name__ == "__main__":
     args = parse_arguments()
     argparse_dict = vars(args)
+    rospy.init_node('exp1_OPA')
 
-    # Setup ROS
-    rospy.Subscriber('/robot_cartesian_pose', PoseSync, obj_pose_cb),
+    # Robot EE pose
+    rospy.Subscriber('/kinova/pose_tool_in_base_fk',
+                     PoseStamped, robot_pose_cb, queue_size=1)
 
-    # 5 Objects' poses
-    rospy.Subscriber("/object0_pose_sync", PoseSync,
-                     obj_pose_cb, queue_size=10)
-    rospy.Subscriber("/object1_pose_sync", PoseSync,
-                     obj_pose_cb, queue_size=10)
-    rospy.Subscriber("/object2_pose_sync", PoseSync,
-                     obj_pose_cb, queue_size=10)
-    rospy.Subscriber("/object3_pose_sync", PoseSync,
-                     obj_pose_cb, queue_size=10)
-    rospy.Subscriber("/object4_pose_sync", PoseSync,
-                     obj_pose_cb, queue_size=10)
+    # Object poses
+    # rospy.Subscriber("/object0_pose_sync", PoseStamped,
+    #                  obj_pose_cb, queue_size=10)
 
     # Is-intervene Handler? subscriber, service, or action server?
     # TODO
 
-    # Target joint topic specific to kinova
-    joint_target_pub = rospy.Publisher(
-        "/kinova_joint_ref", PoseSync, queue_size=10)
+    # Target pose topic
+    pose_pub = rospy.Publisher("/kinova_demo/pose_cmd", PoseStamped, queue_size=10)
+    is_intervene_pub = rospy.Publisher("/kinova_demo/is_intervene", Bool, queue_size=10)
 
-    robot = KinovaRobot()
+    # Listen for keypresses marking start/stop of human intervention
+    listener = keyboard.Listener(
+        on_press=is_intervene_cb)
+    listener.start()
 
     # create folder to store user results
     user_dir = os.path.join("user_trials", args.user, "exp_real_world")
@@ -153,7 +158,7 @@ def main():
     # In exp3, don't know anything about the scanner or table. Initialize both
     # position and orientation features as None with requires_grad=True
     calc_rot, calc_pos = True, True
-    train_rot, train_pos = True, True
+    train_rot, train_pos = False, True
     # NOTE: not training "object_types", purely object identifiers
     object_idxs = np.arange(num_objects)
     pos_obj_types = [None] * num_objects
@@ -163,15 +168,30 @@ def main():
     policy.init_new_objs(pos_obj_types=pos_obj_types, rot_obj_types=rot_obj_types,
                          pos_requires_grad=pos_requires_grad, rot_requires_grad=rot_requires_grad)
 
-    # Define start robot pose
-    movable_joints = get_movable_joints(robot)
-    set_joint_positions(robot, movable_joints, init_joints)
-    start_pos_world, start_ori_quat = robot.get_EE_pose()
+    # Set start robot pose
+    start_pose_world = np.concatenate([start_pos_world, start_ori_quat])
     start_pose_net = np.concatenate(
         [start_pos_world * World2Net, start_ori_quat])
+    if DEBUG:
+        cur_pos_world = np.copy(start_pos_world)
+        cur_ori_quat = np.copy(start_ori_quat)
+    else:
+        start_dist = 1e10
+        dEE_pos = 1e10
+        prev_pos_world = np.copy(cur_pos_world)
+        while not rospy.is_shutdown() and (
+            cur_pos_world is None or start_dist > 0.3 or dEE_pos > 1e-3):
+            pose_pub.publish(pose_to_msg(start_pose_world))
+            if cur_pos_world is None:
+                print("Waiting to receive robot pos")
+            else:
+                start_dist = np.linalg.norm(cur_pos_world - start_pos_world)
+                dEE_pos = np.linalg.norm(cur_pos_world - prev_pos_world)
+                prev_pos_world = np.copy(cur_pos_world)
+                print("Waiting to reach start pos, error: %.3f, change: %.3f" % (start_dist, dEE_pos))
+            rospy.sleep(0.4)
 
     # Define final goal pose (drop-off bin)
-    goal_ori_quat = np.copy(start_ori_quat)
     goal_pose_net = np.concatenate([goal_pos_world * World2Net, goal_ori_quat])
 
     # Convert np arrays to torch tensors for model input
@@ -192,7 +212,6 @@ def main():
         # TODO:
         object_colors = [
             (0, 255, 0),
-            (0, 0, 255),
         ]
         all_object_colors = object_colors + [
             Params.start_color_rgb,
@@ -202,48 +221,52 @@ def main():
         force_colors = object_colors + [Params.goal_color_rgb]
 
     it = 0
-    tol = 0.1
-    error = np.Inf
+    tol = 0.01
+    error = 1e10
+    perturb_pos_traj_world = []
     while not rospy.is_shutdown() and error > tol:
-        if cur_pos_world is None:
-            rospy.sleep(0.1)
-            continue
-
-        # Get current object poses and convert to net input
-        object_pos_net = World2Net * object_pos_world
-        object_poses_net = np.concatenate(
-            [object_pos_net, object_oris], axis=-1)
-        object_poses_tensor = torch.from_numpy(pose_to_model_input(
-            object_poses_net)).to(torch.float32).to(DEVICE)
-        objects_torch = torch.cat(
-            [object_poses_tensor, object_radii_torch], dim=-1).unsqueeze(0)
-
-        perturb_pos_traj_sim = []
+        # TODO: REMOVE! TEMPORARY
+        # # Get current object poses and convert to net input
+        # object_pos_net = World2Net * object_pos_world
+        # object_poses_net = np.concatenate(
+        #     [object_pos_net, object_oris], axis=-1)
+        # object_poses_tensor = torch.from_numpy(pose_to_model_input(
+        #     object_poses_net)).to(torch.float32).to(DEVICE)
+        # objects_torch = torch.cat(
+        #     [object_poses_tensor, object_radii_torch], dim=-1).unsqueeze(0)
 
         it += 1
-        cur_pos_net = Net2World * cur_pos_world
-        cur_pose_net = np.concatenate([cur_pos_net, cur_ori])
+        print("cur pos: ", cur_pos_world)
+        cur_pos_net = cur_pos_world * World2Net
+        cur_pose_net = np.concatenate([cur_pos_net, cur_ori_quat])
         error = np.linalg.norm(goal_pos_world - cur_pos_world)
 
         if need_update:
             dist = np.linalg.norm(
-                perturb_pos_traj_sim[-1] - perturb_pos_traj_sim[0])
+                perturb_pos_traj_world[-1] - perturb_pos_traj_world[0])
             # 1 step for start, 1 step for goal at least
             T = max(2, int(np.ceil(dist / dstep)))
-            perturb_pos_traj_sim = np.linspace(
-                start=perturb_pos_traj_sim[0], stop=perturb_pos_traj_sim[-1], num=T)
+            perturb_pos_traj_world = np.linspace(
+                start=perturb_pos_traj_world[0], stop=perturb_pos_traj_world[-1], num=T)
 
             # Construct overall perturb traj and adaptation data
-            perturb_pos_traj_net = Net2World * perturb_pos_traj_sim
+            perturb_pos_traj_net = perturb_pos_traj_world * World2Net
             # NOTE: cannot track arbitrary orientation traj, perturbation
             #   only defines a final, target orientation
-            perturb_ori_traj = np.copy(cur_ori)[
+            perturb_ori_traj = np.copy(cur_ori_quat)[
                 np.newaxis, :].repeat(T, axis=0)
             perturb_pose_traj_net = np.hstack(
                 [np.vstack(perturb_pos_traj_net), perturb_ori_traj])
+
+            # Given desired EE positions from human perturb, need to calculate corresponding
+            # projected object poses for flat tables
+            table_poses_projected_net = robot_table_surface_projections(
+                table_bounds_sim=table_bounds_world, EE_pos_sim=perturb_pos_traj_world,
+                table_height_sim=table_height_world, scale_to_net=World2Net)
+
             batch_data = [
                 (perturb_pose_traj_net, start_pose_net, goal_pose_net, goal_rot_radius,
-                    object_poses_net[np.newaxis].repeat(T, axis=0),
+                    table_poses_projected_net,
                     object_radii[np.newaxis].repeat(T, axis=0),
                     object_idxs)]
 
@@ -252,25 +275,22 @@ def main():
                                train_pos=True, train_rot=False,
                                n_adapt_iters=custom_num_pos_net_updates, dstep=dstep,
                                verbose=False, clip_params=True)
-            # TODO: do we need to truncate traj to only be 2 timesteps for ori?
-            #   that's what we did before, but may not be necessary
-            T = 2
-            batch_data = [
-                (perturb_pose_traj_net[[0, -1], :], start_pose_net, goal_pose_net, goal_rot_radius,
-                    object_poses_net[np.newaxis].repeat(T, axis=0),
-                    object_radii[np.newaxis].repeat(T, axis=0),
-                    object_idxs)]
-            perform_adaptation(policy=policy, batch_data=batch_data,
-                               train_pos=False, train_rot=True,
-                               n_adapt_iters=custom_num_rot_net_updates, dstep=dstep,
-                               verbose=False, clip_params=True)
 
             # reset the intervention data
-            perturb_pos_traj_sim = []
+            perturb_pos_traj_world = []
             need_update = False
             break  # start new trial with updated weights
 
         else:
+            # Compute robot EE -> table projections
+            table_poses_projected_net = robot_table_surface_projections(
+                table_bounds_sim=table_bounds_world, EE_pos_sim=cur_pos_world,
+                table_height_sim=table_height_world, scale_to_net=World2Net)[0]  # remove time dimension
+            table_poses_projected_tensor = torch.from_numpy(
+                pose_to_model_input(table_poses_projected_net)).to(torch.float32).to(
+                DEVICE)
+            objects_torch = torch.cat([table_poses_projected_tensor, object_radii_torch], dim=-1).unsqueeze(0)
+
             with torch.no_grad():
                 # Define "object" inputs into policy
                 # current
@@ -303,11 +323,10 @@ def main():
                                                            object_indices=object_idxs_tensor,
                                                            calc_rot=calc_rot,
                                                            calc_pos=calc_pos)
-                local_target_pos_sim = cur_pose_tensor[0,
-                                                       :pos_dim] / Net2World
-                local_target_pos_sim = local_target_pos_sim + \
+                local_target_pos_world = cur_pose_tensor[0, 0:pos_dim] * Net2World
+                local_target_pos_world = local_target_pos_world + \
                     dstep * pred_vec[0, :pos_dim]
-                local_target_pos_sim = local_target_pos_sim.detach().cpu().numpy()
+                local_target_pos_world = local_target_pos_world.detach().cpu().numpy()
                 local_target_ori = decode_ori(
                     pred_ori.detach().cpu().numpy()).flatten()
 
@@ -315,7 +334,7 @@ def main():
         if args.view_ros:
             all_objects = [Object(pos=pose[0:POS_DIM], ori=pose[POS_DIM:],
                                   radius=radius) for pose, radius in
-                           zip(object_poses_net, object_radii)]
+                           zip(table_poses_projected_net, object_radii)]
             all_objects += [
                 Object(
                     pos=start_pose_net[0:POS_DIM], radius=Params.agent_radius, ori=start_pose_net[POS_DIM:]),
@@ -325,7 +344,7 @@ def main():
                     pos=cur_pose_net[0:POS_DIM], radius=Params.agent_radius, ori=cur_pose_net[POS_DIM:])
             ]
             agent_traj = np.vstack(
-                [cur_pose_net, np.concatenate([Net2World * local_target_pos_sim, cur_ori])])
+                [cur_pose_net, np.concatenate([Net2World * local_target_pos_world, cur_ori_quat])])
             if isinstance(object_forces, torch.Tensor):
                 object_forces = object_forces[0].detach().cpu().numpy()
             viz_3D_publisher.publish(objects=all_objects, agent_traj=agent_traj,
@@ -335,19 +354,26 @@ def main():
         # Apply low-pass filter to smooth out policy's sudden changes in orientation
         key_times = [0, 1]
         rotations = R.from_quat(
-            np.vstack([cur_ori, local_target_ori]))
+            np.vstack([cur_ori_quat, local_target_ori]))
         slerp = Slerp(key_times, rotations)
-        alpha = 0.3
-        # alpha*cur_ori_quat + alpha*local_target_ori
+        alpha = 0.3   # alpha*cur_ori_quat + alpha*local_target_ori
         interp_rot = slerp([alpha])[0]
-        target_pose = (local_target_pos_sim, interp_rot.as_quat())
+
+        # Clip target EE position to bounds
+        local_target_pos_world = np.clip(local_target_pos_world, a_min=ee_min_pos_world, a_max=ee_max_pos_world)
 
         # Publish target pose
-        cur_pose = (cur_pos_world, cur_ori)
-        target_joints = robot.iterative_IK(
-            thetas=cur_joints, xs=cur_pose, xd=target_pose)
-        joint_target_pub.publish(joints_to_msg(target_joints))
+        if not DEBUG:
+            target_pose = np.concatenate([local_target_pos_world, interp_rot.as_quat()])
+            pose_pub.publish(pose_to_msg(target_pose))
+            # Publish is_intervene
+            is_intervene_pub.publish(Bool(is_intervene))
 
+        # TODO: REMOVE! TEMPORARY
+        if DEBUG:
+            cur_pos_world = local_target_pos_world
+            cur_ori_quat = interp_rot.as_quat()
 
-if __name__ == '__main__':
-    main()
+        rospy.sleep(0.1)
+
+    print(f"Finished! Error {error} vs tol {tol}")

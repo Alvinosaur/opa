@@ -102,12 +102,13 @@ def on_press(key):
 
 
 def robot_table_surface_projections(table_bounds_sim: typing.List[Tuple],
-                                    EE_pos_sim: np.ndarray, table_height_sim: float):
+                                    EE_pos_sim: np.ndarray, table_height_sim: float,
+                                    scale_to_net=Sim2Net):
     """
     Projects agent position onto table surfaces within their bounds. Returns
     projected positions in Network space (multiplies position with Sim2Net)
 
-    :param table_bounds_sim: table bounds in simulation space
+    :param table_bounds_sim: table bounds in simulation space (minx, maxx, miny, maxy)
     :param EE_pos_sim: agent position(s) in simulation space  (T x 3)
     :param table_height_sim: table height in simulation space
     :return: projected table poses in Network space (T x n_tables x 7)
@@ -131,7 +132,7 @@ def robot_table_surface_projections(table_bounds_sim: typing.List[Tuple],
         table_pos_sim[:, 2] = table_height_sim
 
         # Convert to Network space and store
-        table_pose_net = np.concatenate([Sim2Net * table_pos_sim,
+        table_pose_net = np.concatenate([scale_to_net * table_pos_sim,
                                          # orientation doesn't matter for this experiment
                                          some_ori[np.newaxis].repeat(T, axis=0)],
                                         axis=1)

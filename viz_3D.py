@@ -53,6 +53,17 @@ def pose_to_msg(pose: np.ndarray) -> PoseStamped:
 
     return msg
 
+def msg_to_pose(msg):
+    pose = np.array([
+        msg.pose.position.x,
+        msg.pose.position.y,
+        msg.pose.position.z,
+        msg.pose.orientation.x,
+        msg.pose.orientation.y,
+        msg.pose.orientation.z,
+        msg.pose.orientation.w,
+    ])
+    return pose
 
 def publish_object_forces(pub: rospy.Publisher, cur_pos: np.ndarray,
                           object_forces: np.ndarray, color_rgbs: List[Tuple[float, float, float]]):
@@ -222,7 +233,10 @@ class Viz3DROSPublisher(object):
         self.bounds_msg = make_boundary_message(bounds[0], bounds[1]) if bounds is not None else None
 
         # Start ROS node
-        rospy.init_node("view_obstacles")
+        try:
+            rospy.init_node("view_obstacles")
+        except rospy.exceptions.ROSException:
+            pass
         self.ros_rate = rospy.Rate(hz=10)
 
         # Define ROS Publishers
