@@ -5,7 +5,7 @@ For a copy, see <https://opensource.org/licenses/MIT>.
 """
 import numpy as np
 import os
-from pynput import keyboard
+# from pynput import keyboard
 import logging
 import argparse
 import torch
@@ -34,7 +34,8 @@ logging.getLogger('asyncio').setLevel(logging.WARNING)
 # get_camera_pose()[0]
 camera_pos = np.array([0.25489926, 1.31271563, 0.8570624])
 # get_camera().target
-camera_target = np.array([0.30520865321159363, -0.48658108711242676, 0.8581621050834656])
+camera_target = np.array(
+    [0.30520865321159363, -0.48658108711242676, 0.8581621050834656])
 
 signal.signal(signal.SIGINT, sigint_handler)
 
@@ -95,7 +96,8 @@ def on_press(key):
 
         if key_pressed:
             # record intervention trajectory
-            robot_trajectory.append((np.copy(local_target_pos_sim), np.copy(cur_ori_quat)))
+            robot_trajectory.append(
+                (np.copy(local_target_pos_sim), np.copy(cur_ori_quat)))
             human_perturbed.append(True)
 
             perturb_pos_traj_sim.append(np.copy(local_target_pos_sim))
@@ -183,8 +185,10 @@ def load_scene():
     table_bounds = [table1_bounds, table2_bounds, table3_bounds]
 
     # Load source(robot-held) and goal(visualize goal) cups
-    src_cup_path = os.path.join(pybullet_data_path, MODEL_DIRECTORY, "dinnerware/cup/cup.urdf")
-    goal_cup_path = os.path.join(pybullet_data_path, MODEL_DIRECTORY, "dinnerware/cup/cup_goal.urdf")
+    src_cup_path = os.path.join(
+        pybullet_data_path, MODEL_DIRECTORY, "dinnerware/cup/cup.urdf")
+    goal_cup_path = os.path.join(
+        pybullet_data_path, MODEL_DIRECTORY, "dinnerware/cup/cup_goal.urdf")
     cup = load_model(src_cup_path, is_abs_path=True)
     if isinstance(cup, tuple):
         cup = cup[0]
@@ -198,10 +202,13 @@ def load_scene():
 
 def parse_arguments():
     parser = argparse.ArgumentParser()
-    parser.add_argument('--model_name', action='store', type=str, help="trained model name")
+    parser.add_argument('--model_name', action='store',
+                        type=str, help="trained model name")
     parser.add_argument('--loaded_epoch', action='store', type=int)
-    parser.add_argument('--view_ros', action='store_true', help="visualize 3D scene with ROS Rviz")
-    parser.add_argument('--user', action='store', type=str, default="some_user", help="user name to save results")
+    parser.add_argument('--view_ros', action='store_true',
+                        help="visualize 3D scene with ROS Rviz")
+    parser.add_argument('--user', action='store', type=str,
+                        default="some_user", help="user name to save results")
     parser.add_argument('--is_baseline', action='store_true')
     parser.add_argument('--draw_saved', action='store_true')
     parser.add_argument('--trial', action='store', type=int, default=0)
@@ -256,8 +263,10 @@ def main():
     if not os.path.exists(user_dir):
         os.makedirs(user_dir)
     is_baseline_str = "default" if is_baseline else "policy"
-    saved_traj_path = os.path.join(user_dir, f'trajectories_{is_baseline_str}.npy')
-    saved_human_perturbed_path = os.path.join(user_dir, f'human_perturbed_{is_baseline_str}.npy')
+    saved_traj_path = os.path.join(
+        user_dir, f'trajectories_{is_baseline_str}.npy')
+    saved_human_perturbed_path = os.path.join(
+        user_dir, f'human_perturbed_{is_baseline_str}.npy')
 
     # Save experiment input arguments
     with open(os.path.join(user_dir, "args.json"), "w") as outfile:
@@ -286,10 +295,13 @@ def main():
     calc_rot, calc_pos = False, True
     train_rot, train_pos = False, True
     num_objects = 3
-    object_idxs = np.arange(num_objects)  # NOTE: not training "object_types", purely object identifiers
+    # NOTE: not training "object_types", purely object identifiers
+    object_idxs = np.arange(num_objects)
     pos_obj_types = [None, None, None]
-    pos_requires_grad = [True, True, True]  # For exp1 specifically, update only position preference features
-    rot_obj_types = [Params.IGNORE_ROT_IDX, Params.IGNORE_ROT_IDX, Params.IGNORE_ROT_IDX]
+    # For exp1 specifically, update only position preference features
+    pos_requires_grad = [True, True, True]
+    rot_obj_types = [Params.IGNORE_ROT_IDX,
+                     Params.IGNORE_ROT_IDX, Params.IGNORE_ROT_IDX]
     rot_requires_grad = [False, False, False]
     policy.init_new_objs(pos_obj_types=pos_obj_types, rot_obj_types=rot_obj_types,
                          pos_requires_grad=pos_requires_grad, rot_requires_grad=rot_requires_grad)
@@ -298,7 +310,8 @@ def main():
     dstep = 0.1
     table_height_sim = 3.5 / Sim2Net
     object_radii = np.array([1.0] * num_objects)
-    goal_rot_radius = np.array([1.0])  # arbitrary, orientation doesn't matter in this task
+    # arbitrary, orientation doesn't matter in this task
+    goal_rot_radius = np.array([1.0])
     init_cup_pos = Point(x=-0.4, y=0.125, z=0.9)
     obstacles = []
 
@@ -309,7 +322,8 @@ def main():
     # Helper func to get robot pose in world frame
     tool_link = get_tool_link(robot)  # int
     global get_EE_pose
-    get_EE_pose = lambda: (
+
+    def get_EE_pose(): return (
         np.array(get_com_pose(robot, tool_link)[0]),
         np.array(get_com_pose(robot, tool_link)[1])
     )
@@ -344,15 +358,19 @@ def main():
         width = 7
 
         loaded_robot_traj = np.load(saved_traj_path, allow_pickle=True)[trial]
-        loaded_human_perturbed = np.load(saved_human_perturbed_path, allow_pickle=True)[trial]
+        loaded_human_perturbed = np.load(
+            saved_human_perturbed_path, allow_pickle=True)[trial]
 
         for i in range(1, len(loaded_robot_traj)):
-            color = RGBA(0.9, 0, 0, 1) if loaded_human_perturbed[i] else RGBA(0, 0.7, 0, 1)
-            add_line(loaded_robot_traj[i - 1][0], loaded_robot_traj[i][0], color=color, width=width)
+            color = RGBA(0.9, 0, 0, 1) if loaded_human_perturbed[i] else RGBA(
+                0, 0.7, 0, 1)
+            add_line(
+                loaded_robot_traj[i - 1][0], loaded_robot_traj[i][0], color=color, width=width)
 
     # save trajectories for post debugging/viz
     all_robot_trajectories = []  # overall robot EE pose trajectory across all trials
-    all_human_perturbed = []  # whether human perturbed at a given time step across all trials
+    # whether human perturbed at a given time step across all trials
+    all_human_perturbed = []
 
     # activate keybindings to listen for user keyboard input to perturb robot
     # and define global variables modified in the keyboard callback
@@ -360,7 +378,8 @@ def main():
     key_pressed = False
     need_update = False
     global local_target_pos_sim, perturb_pos_traj_sim, robot_trajectory, human_perturbed
-    local_target_pos_sim = None  # next immediate target position to track, user can set this directly
+    # next immediate target position to track, user can set this directly
+    local_target_pos_sim = None
     perturb_pos_traj_sim = []  # store human perturb used for online adaptation
     robot_trajectory = []  # append to all_robot_trajectories after each trial
     human_perturbed = []
@@ -370,7 +389,8 @@ def main():
 
     # Optionally view with ROS Rviz
     if args.view_ros:
-        viz_3D_publisher = Viz3DROSPublisher(num_objects=num_objects, bounds=(Params.lb_3D, Params.ub_3D))
+        viz_3D_publisher = Viz3DROSPublisher(
+            num_objects=num_objects, bounds=(Params.lb_3D, Params.ub_3D))
         table_colors = [
             (255, 0, 0),
             (0, 255, 0),  # randomly chosen
@@ -413,11 +433,16 @@ def main():
         # Convert np arrays to torch tensors for model input
         start_tensor = torch.from_numpy(
             pose_to_model_input(start_pose_net[np.newaxis])).to(torch.float32).to(DEVICE)
-        agent_radius_tensor = torch.tensor([Params.agent_radius], device=DEVICE).view(1, 1)
-        goal_rot_radii = torch.from_numpy(goal_rot_radius).to(DEVICE).view(1, 1)
-        goal_tensor = torch.from_numpy(pose_to_model_input(goal_pose_net[np.newaxis])).to(torch.float32).to(DEVICE)
-        object_radii_torch = torch.from_numpy(object_radii).to(torch.float32).to(DEVICE).view(num_objects, 1)
-        object_idxs_tensor = torch.from_numpy(object_idxs).to(torch.long).to(DEVICE).unsqueeze(0)
+        agent_radius_tensor = torch.tensor(
+            [Params.agent_radius], device=DEVICE).view(1, 1)
+        goal_rot_radii = torch.from_numpy(
+            goal_rot_radius).to(DEVICE).view(1, 1)
+        goal_tensor = torch.from_numpy(pose_to_model_input(
+            goal_pose_net[np.newaxis])).to(torch.float32).to(DEVICE)
+        object_radii_torch = torch.from_numpy(object_radii).to(
+            torch.float32).to(DEVICE).view(num_objects, 1)
+        object_idxs_tensor = torch.from_numpy(object_idxs).to(
+            torch.long).to(DEVICE).unsqueeze(0)
 
         it = 0
         tol = 0.1
@@ -431,7 +456,8 @@ def main():
             cur_pose_net = np.concatenate([cur_pos_net, cur_ori_quat])
 
             # Kinematically feasible change in orientation so goal position can be reached
-            tgt_time = np.linalg.norm(start_pos_sim - goal_pos_sim) - np.linalg.norm(goal_pos_sim - cur_pos_sim)
+            tgt_time = np.linalg.norm(
+                start_pos_sim - goal_pos_sim) - np.linalg.norm(goal_pos_sim - cur_pos_sim)
             tgt_time = np.clip(tgt_time, 0, key_times[1])
             local_target_ori = global_slerp([tgt_time])[0].as_quat()
 
@@ -440,8 +466,10 @@ def main():
                 # NOTE: fit line to the noisy perturbation trajectory, this
                 #   assumption only valid if assuming perturbation shows *preferred behavior*
                 #   which is a preferred pose. Cannot learn to imitate complex trajectory
-                dist = np.linalg.norm(perturb_pos_traj_sim[-1] - perturb_pos_traj_sim[0])
-                T = max(2, int(np.ceil(dist / dstep)))  # 1 step for start, 1 step for goal at least
+                dist = np.linalg.norm(
+                    perturb_pos_traj_sim[-1] - perturb_pos_traj_sim[0])
+                # 1 step for start, 1 step for goal at least
+                T = max(2, int(np.ceil(dist / dstep)))
                 perturb_pos_traj_sim = np.linspace(
                     start=perturb_pos_traj_sim[0], stop=perturb_pos_traj_sim[-1], num=T)
 
@@ -453,23 +481,29 @@ def main():
 
                 # Construct overall perturb traj and adaptation data
                 perturb_pos_traj_net = Sim2Net * perturb_pos_traj_sim
-                perturb_ori_traj = np.copy(cur_ori_quat)[np.newaxis, :].repeat(T, axis=0)
-                perturb_traj = np.hstack([np.vstack(perturb_pos_traj_net), perturb_ori_traj])
+                perturb_ori_traj = np.copy(cur_ori_quat)[
+                    np.newaxis, :].repeat(T, axis=0)
+                perturb_traj = np.hstack(
+                    [np.vstack(perturb_pos_traj_net), perturb_ori_traj])
                 batch_data = [
                     (perturb_traj, start_pose_net, goal_pose_net, goal_rot_radius,
-                     table_poses_projected_net, object_radii[np.newaxis].repeat(T, axis=0),
+                     table_poses_projected_net, object_radii[np.newaxis].repeat(
+                         T, axis=0),
                      object_idxs)]
 
                 # Update policy
                 print("Attract and repel feats: ",
-                      policy.policy_network.pos_pref_feat_train[Params.ATTRACT_IDX].detach().cpu().numpy(),
+                      policy.policy_network.pos_pref_feat_train[Params.ATTRACT_IDX].detach(
+                      ).cpu().numpy(),
                       policy.policy_network.pos_pref_feat_train[Params.REPEL_IDX].detach().cpu().numpy())
-                print("Old pref feats: ", torch.cat(policy.obj_pos_feats, dim=0).detach().cpu().numpy())
+                print("Old pref feats: ", torch.cat(
+                    policy.obj_pos_feats, dim=0).detach().cpu().numpy())
                 perform_adaptation(policy=policy, batch_data=batch_data,
                                    train_pos=train_pos, train_rot=train_rot,
                                    n_adapt_iters=num_pos_net_updates, dstep=dstep,
                                    verbose=False, clip_params=True)
-                print("New pref feats: ", torch.cat(policy.obj_pos_feats, dim=0).detach().cpu().numpy())
+                print("New pref feats: ", torch.cat(
+                    policy.obj_pos_feats, dim=0).detach().cpu().numpy())
 
                 # reset the intervention data
                 perturb_pos_traj_sim = []
@@ -496,24 +530,30 @@ def main():
                     table_poses_projected_tensor = torch.from_numpy(
                         pose_to_model_input(table_poses_projected_net)).to(torch.float32).to(
                         DEVICE)
-                    objects_torch = torch.cat([table_poses_projected_tensor, object_radii_torch], dim=-1).unsqueeze(0)
+                    objects_torch = torch.cat(
+                        [table_poses_projected_tensor, object_radii_torch], dim=-1).unsqueeze(0)
 
                     with torch.no_grad():
                         # Define "object" inputs into policy
                         # current agent
                         cur_pose_tensor = torch.from_numpy(
                             pose_to_model_input(cur_pose_net[np.newaxis])).to(torch.float32).to(DEVICE)
-                        current = torch.cat([cur_pose_tensor, agent_radius_tensor], dim=-1).unsqueeze(1)
+                        current = torch.cat(
+                            [cur_pose_tensor, agent_radius_tensor], dim=-1).unsqueeze(1)
                         # goal
                         goal_radii = goal_radius_scale * torch.norm(
-                            goal_tensor[:, :pos_dim] - cur_pose_tensor[:, :pos_dim],
+                            goal_tensor[:, :pos_dim] -
+                            cur_pose_tensor[:, :pos_dim],
                             dim=-1).unsqueeze(0)
-                        goal_rot_objects = torch.cat([goal_tensor, goal_rot_radii], dim=-1).unsqueeze(1)
-                        goal_objects = torch.cat([goal_tensor, goal_radii], dim=-1).unsqueeze(1)
+                        goal_rot_objects = torch.cat(
+                            [goal_tensor, goal_rot_radii], dim=-1).unsqueeze(1)
+                        goal_objects = torch.cat(
+                            [goal_tensor, goal_radii], dim=-1).unsqueeze(1)
                         # start
                         start_rot_radii = torch.norm(start_tensor[:, :pos_dim] - cur_pose_tensor[:, :pos_dim],
                                                      dim=-1).unsqueeze(0)
-                        start_rot_objects = torch.cat([start_tensor, start_rot_radii], dim=-1).unsqueeze(1)
+                        start_rot_objects = torch.cat(
+                            [start_tensor, start_rot_radii], dim=-1).unsqueeze(1)
 
                         # Get policy output, form into action
                         pred_vec, pred_ori, object_forces = policy(current=current,
@@ -523,9 +563,11 @@ def main():
                                                                    object_indices=object_idxs_tensor,
                                                                    calc_rot=calc_rot,
                                                                    calc_pos=calc_pos)
-                        local_target_pos_sim = cur_pose_tensor[0, :pos_dim] / Sim2Net
+                        local_target_pos_sim = cur_pose_tensor[0,
+                                                               :pos_dim] / Sim2Net
                         try:
-                            local_target_pos_sim = local_target_pos_sim + dstep * pred_vec[0, :pos_dim]
+                            local_target_pos_sim = local_target_pos_sim + \
+                                dstep * pred_vec[0, :pos_dim]
                             local_target_pos_sim = local_target_pos_sim.detach().cpu().numpy()
                         except TypeError:
                             # human intervened right here and local_target_pos_sim is now a numpy array
@@ -538,11 +580,15 @@ def main():
                                       radius=radius) for pose, radius in
                                zip(table_poses_projected_net, object_radii)]
                 all_objects += [
-                    Object(pos=start_pose_net[0:POS_DIM], radius=Params.agent_radius, ori=start_pose_net[POS_DIM:]),
-                    Object(pos=goal_pose_net[0:POS_DIM], radius=Params.agent_radius, ori=goal_pose_net[POS_DIM:]),
-                    Object(pos=cur_pose_net[0:POS_DIM], radius=Params.agent_radius, ori=cur_pose_net[POS_DIM:])
+                    Object(
+                        pos=start_pose_net[0:POS_DIM], radius=Params.agent_radius, ori=start_pose_net[POS_DIM:]),
+                    Object(
+                        pos=goal_pose_net[0:POS_DIM], radius=Params.agent_radius, ori=goal_pose_net[POS_DIM:]),
+                    Object(
+                        pos=cur_pose_net[0:POS_DIM], radius=Params.agent_radius, ori=cur_pose_net[POS_DIM:])
                 ]
-                agent_traj = np.vstack([cur_pose_net, np.concatenate([Sim2Net * local_target_pos_sim, cur_ori_quat])])
+                agent_traj = np.vstack([cur_pose_net, np.concatenate(
+                    [Sim2Net * local_target_pos_sim, cur_ori_quat])])
                 if isinstance(object_forces, torch.Tensor):
                     object_forces = object_forces[0].detach().cpu().numpy()
                 viz_3D_publisher.publish(objects=all_objects, agent_traj=agent_traj,

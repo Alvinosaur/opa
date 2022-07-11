@@ -27,7 +27,6 @@ from exp_params import *
 from exp_utils import *
 from elastic_band import Object
 from viz_3D import Viz3DROSPublisher, pose_to_msg, msg_to_pose
-from kinova_robot import KinovaRobot
 from exp1_cup_low_table_sim import robot_table_surface_projections
 
 World2Net = 10.0
@@ -46,7 +45,6 @@ goal_pos_world = np.array([0.4, -0.271, 0.18])
 goal_ori_quat = np.array([-0.6979, -0.7149, 0.0265, 0.0311])
 start_pos_world = np.array([0.4, 0.425, 0.18])
 start_ori_quat = np.array([-0.6979, -0.7149, 0.0265, 0.0311])
-obstacles = []
 
 # Need more adaptation steps because this example is more difficult
 custom_num_pos_net_updates = 20
@@ -54,18 +52,15 @@ custom_num_rot_net_updates = 30
 
 # Global info updated by callbacks
 cur_pos_world, cur_ori_quat = None, None
-perturb_pos_traj_world = []
-intervene_object_poses = [[] for _ in range(num_objects)]
-object_pos_world = np.zeros((num_objects, 3))  # updated by callbacks
-object_oris = np.array([0, 0, 0, 1.])[np.newaxis].repeat(num_objects, axis=0)
+perturb_pose_traj_world = []
 is_intervene = False
 need_update = False
 
-DEBUG = False
+DEBUG = True
 if DEBUG:
     dstep = 0.01
 else:
-    dstep = 0.15
+    dstep = 0.2
 
 
 def is_intervene_cb(key):
@@ -75,20 +70,14 @@ def is_intervene_cb(key):
         if not is_intervene:  # True -> False, end of intervention
             need_update = True
 
-def obj_pose_cb(msg):
-    # TODO:
-    global is_intervene
-    if is_intervene:
-        pass
-
 def robot_pose_cb(msg):
-    global is_intervene, cur_pos_world, cur_ori_quat, perturb_pos_traj_world, DEBUG
+    global is_intervene, cur_pos_world, cur_ori_quat, perturb_pose_traj_world, DEBUG
     pose = msg_to_pose(msg)
     if not DEBUG:
         cur_pos_world = pose[0:3]
         cur_ori_quat = pose[3:]
         if is_intervene:
-            perturb_pos_traj_world.append((cur_pos_world, cur_ori_quat))
+            perturb_pose_traj_world.append(np.concatenate([cur_pos_world, cur_ori_quat]))
 
 def parse_arguments():
     parser = argparse.ArgumentParser()
@@ -104,6 +93,28 @@ def parse_arguments():
 
     return args
 
+def reach_start_pos():
+    global cur_pos_world, cur_ori_quat
+    global start_pos_world, start_ori_quat
+    if DEBUG:
+        cur_pos_world = np.copy(start_pos_world)
+        cur_ori_quat = np.copy(start_ori_quat)
+    else:
+        start_dist = 1e10
+        dEE_pos = 1e10
+        prev_pos_world = np.copy(cur_pos_world)
+        while not rospy.is_shutdown() and (
+            cur_pos_world is None or start_dist > 0.3 or dEE_pos > 1e-2):
+            pose_pub.publish(pose_to_msg(start_pose_world))
+            if cur_pos_world is None:
+                print("Waiting to receive robot pos")
+            else:
+                start_dist = np.linalg.norm(cur_pos_world - start_pos_world)
+                dEE_pos = np.linalg.norm(cur_pos_world - prev_pos_world)
+                prev_pos_world = np.copy(cur_pos_world)
+                print("Waiting to reach start pos, error: %.3f, change: %.3f" % (start_dist, dEE_pos))
+            rospy.sleep(0.4)
+
 if __name__ == "__main__":
     args = parse_arguments()
     argparse_dict = vars(args)
@@ -113,16 +124,9 @@ if __name__ == "__main__":
     rospy.Subscriber('/kinova/pose_tool_in_base_fk',
                      PoseStamped, robot_pose_cb, queue_size=1)
 
-    # Object poses
-    # rospy.Subscriber("/object0_pose_sync", PoseStamped,
-    #                  obj_pose_cb, queue_size=10)
-
-    # Is-intervene Handler? subscriber, service, or action server?
-    # TODO
-
     # Target pose topic
     pose_pub = rospy.Publisher("/kinova_demo/pose_cmd", PoseStamped, queue_size=10)
-    is_intervene_pub = rospy.Publisher("/kinova_demo/is_intervene", Bool, queue_size=10)
+    is_intervene_pub = rospy.Publisher("/is_intervene", Bool, queue_size=10)
 
     # Listen for keypresses marking start/stop of human intervention
     listener = keyboard.Listener(
@@ -172,24 +176,6 @@ if __name__ == "__main__":
     start_pose_world = np.concatenate([start_pos_world, start_ori_quat])
     start_pose_net = np.concatenate(
         [start_pos_world * World2Net, start_ori_quat])
-    if DEBUG:
-        cur_pos_world = np.copy(start_pos_world)
-        cur_ori_quat = np.copy(start_ori_quat)
-    else:
-        start_dist = 1e10
-        dEE_pos = 1e10
-        prev_pos_world = np.copy(cur_pos_world)
-        while not rospy.is_shutdown() and (
-            cur_pos_world is None or start_dist > 0.3 or dEE_pos > 1e-3):
-            pose_pub.publish(pose_to_msg(start_pose_world))
-            if cur_pos_world is None:
-                print("Waiting to receive robot pos")
-            else:
-                start_dist = np.linalg.norm(cur_pos_world - start_pos_world)
-                dEE_pos = np.linalg.norm(cur_pos_world - prev_pos_world)
-                prev_pos_world = np.copy(cur_pos_world)
-                print("Waiting to reach start pos, error: %.3f, change: %.3f" % (start_dist, dEE_pos))
-            rospy.sleep(0.4)
 
     # Define final goal pose (drop-off bin)
     goal_pose_net = np.concatenate([goal_pos_world * World2Net, goal_ori_quat])
@@ -221,159 +207,163 @@ if __name__ == "__main__":
         force_colors = object_colors + [Params.goal_color_rgb]
 
     it = 0
-    tol = 0.01
-    error = 1e10
-    perturb_pos_traj_world = []
-    while not rospy.is_shutdown() and error > tol:
-        # TODO: REMOVE! TEMPORARY
-        # # Get current object poses and convert to net input
-        # object_pos_net = World2Net * object_pos_world
-        # object_poses_net = np.concatenate(
-        #     [object_pos_net, object_oris], axis=-1)
-        # object_poses_tensor = torch.from_numpy(pose_to_model_input(
-        #     object_poses_net)).to(torch.float32).to(DEVICE)
-        # objects_torch = torch.cat(
-        #     [object_poses_tensor, object_radii_torch], dim=-1).unsqueeze(0)
+    tol = 0.07
+    perturb_pose_traj_world = []
+    for exp_iter in range(3):
+        reach_start_pos()
+        error = 1e10
+        while not rospy.is_shutdown() and error > tol:
+            # TODO: REMOVE! TEMPORARY
+            # # Get current object poses and convert to net input
+            # object_pos_net = World2Net * object_pos_world
+            # object_poses_net = np.concatenate(
+            #     [object_pos_net, object_oris], axis=-1)
+            # object_poses_tensor = torch.from_numpy(pose_to_model_input(
+            #     object_poses_net)).to(torch.float32).to(DEVICE)
+            # objects_torch = torch.cat(
+            #     [object_poses_tensor, object_radii_torch], dim=-1).unsqueeze(0)
 
-        it += 1
-        print("cur pos: ", cur_pos_world)
-        cur_pos_net = cur_pos_world * World2Net
-        cur_pose_net = np.concatenate([cur_pos_net, cur_ori_quat])
-        error = np.linalg.norm(goal_pos_world - cur_pos_world)
+            it += 1
+            print("cur pos: ", cur_pos_world)
+            cur_pos_net = cur_pos_world * World2Net
+            cur_pose_net = np.concatenate([cur_pos_net, cur_ori_quat])
+            error = np.linalg.norm(goal_pos_world - cur_pos_world)
 
-        if need_update:
-            dist = np.linalg.norm(
-                perturb_pos_traj_world[-1] - perturb_pos_traj_world[0])
-            # 1 step for start, 1 step for goal at least
-            T = max(2, int(np.ceil(dist / dstep)))
-            perturb_pos_traj_world = np.linspace(
-                start=perturb_pos_traj_world[0], stop=perturb_pos_traj_world[-1], num=T)
+            if need_update and not DEBUG:
+                assert len(perturb_pose_traj_world) > 1, "Need intervention traj of > 1 steps"
+                dist = np.linalg.norm(
+                    perturb_pose_traj_world[-1][0:POS_DIM] - perturb_pose_traj_world[0][0:POS_DIM])
+                # 1 step for start, 1 step for goal at least
+                T = max(2, int(np.ceil(dist / dstep)))
+                perturb_pos_traj_world_interp = np.linspace(
+                    start=perturb_pose_traj_world[0][0:POS_DIM], stop=perturb_pose_traj_world[-1][0:POS_DIM], num=T)
 
-            # Construct overall perturb traj and adaptation data
-            perturb_pos_traj_net = perturb_pos_traj_world * World2Net
-            # NOTE: cannot track arbitrary orientation traj, perturbation
-            #   only defines a final, target orientation
-            perturb_ori_traj = np.copy(cur_ori_quat)[
-                np.newaxis, :].repeat(T, axis=0)
-            perturb_pose_traj_net = np.hstack(
-                [np.vstack(perturb_pos_traj_net), perturb_ori_traj])
+                # Construct overall perturb traj and adaptation data
+                perturb_pos_traj_net = perturb_pos_traj_world_interp * World2Net
+                # NOTE: cannot track arbitrary orientation traj, perturbation
+                #   only defines a final, target orientation
+                perturb_ori_traj = np.copy(cur_ori_quat)[
+                    np.newaxis, :].repeat(T, axis=0)
+                perturb_pose_traj_net = np.hstack(
+                    [np.vstack(perturb_pos_traj_net), perturb_ori_traj])
 
-            # Given desired EE positions from human perturb, need to calculate corresponding
-            # projected object poses for flat tables
-            table_poses_projected_net = robot_table_surface_projections(
-                table_bounds_sim=table_bounds_world, EE_pos_sim=perturb_pos_traj_world,
-                table_height_sim=table_height_world, scale_to_net=World2Net)
+                # Given desired EE positions from human perturb, need to calculate corresponding
+                # projected object poses for flat tables
+                table_poses_projected_net = robot_table_surface_projections(
+                    table_bounds_sim=table_bounds_world, EE_pos_sim=perturb_pos_traj_world_interp,
+                    table_height_sim=table_height_world, scale_to_net=World2Net)
 
-            batch_data = [
-                (perturb_pose_traj_net, start_pose_net, goal_pose_net, goal_rot_radius,
-                    table_poses_projected_net,
-                    object_radii[np.newaxis].repeat(T, axis=0),
-                    object_idxs)]
+                batch_data = [
+                    (perturb_pose_traj_net, start_pose_net, goal_pose_net, goal_rot_radius,
+                        table_poses_projected_net,
+                        object_radii[np.newaxis].repeat(T, axis=0),
+                        object_idxs)]
 
-            # Update policy in position first, then orientation after with diff num iters
-            perform_adaptation(policy=policy, batch_data=batch_data,
-                               train_pos=True, train_rot=False,
-                               n_adapt_iters=custom_num_pos_net_updates, dstep=dstep,
-                               verbose=False, clip_params=True)
+                # Update policy in position first, then orientation after with diff num iters
+                perform_adaptation(policy=policy, batch_data=batch_data,
+                                train_pos=True, train_rot=False,
+                                n_adapt_iters=custom_num_pos_net_updates, dstep=dstep,
+                                verbose=True, clip_params=True)
 
-            # reset the intervention data
-            perturb_pos_traj_world = []
-            need_update = False
-            break  # start new trial with updated weights
+                # reset the intervention data
+                perturb_pose_traj_world = []
+                need_update = False
+                continue  # start new trial with updated weights
 
-        else:
-            # Compute robot EE -> table projections
-            table_poses_projected_net = robot_table_surface_projections(
-                table_bounds_sim=table_bounds_world, EE_pos_sim=cur_pos_world,
-                table_height_sim=table_height_world, scale_to_net=World2Net)[0]  # remove time dimension
-            table_poses_projected_tensor = torch.from_numpy(
-                pose_to_model_input(table_poses_projected_net)).to(torch.float32).to(
-                DEVICE)
-            objects_torch = torch.cat([table_poses_projected_tensor, object_radii_torch], dim=-1).unsqueeze(0)
+            else:
+                # Compute robot EE -> table projections
+                table_poses_projected_net = robot_table_surface_projections(
+                    table_bounds_sim=table_bounds_world, EE_pos_sim=cur_pos_world,
+                    table_height_sim=table_height_world, scale_to_net=World2Net)[0]  # remove time dimension
+                table_poses_projected_tensor = torch.from_numpy(
+                    pose_to_model_input(table_poses_projected_net)).to(torch.float32).to(
+                    DEVICE)
+                objects_torch = torch.cat([table_poses_projected_tensor, object_radii_torch], dim=-1).unsqueeze(0)
 
-            with torch.no_grad():
-                # Define "object" inputs into policy
-                # current
-                cur_pose_tensor = torch.from_numpy(
-                    pose_to_model_input(cur_pose_net[np.newaxis])).to(torch.float32).to(DEVICE)
-                current = torch.cat(
-                    [cur_pose_tensor, agent_radius_tensor], dim=-1).unsqueeze(1)
-                # goal
-                goal_tensor = torch.from_numpy(
-                    pose_to_model_input(goal_pose_net[np.newaxis])).to(torch.float32).to(DEVICE)
-                goal_radii = goal_radius_scale * torch.norm(
-                    goal_tensor[:, :pos_dim] -
-                    cur_pose_tensor[:, :pos_dim],
-                    dim=-1).unsqueeze(0)
-                goal_rot_objects = torch.cat(
-                    [goal_tensor, goal_rot_radii], dim=-1).unsqueeze(1)
-                goal_objects = torch.cat(
-                    [goal_tensor, goal_radii], dim=-1).unsqueeze(1)
-                # start
-                start_rot_radii = torch.norm(start_tensor[:, :pos_dim] - cur_pose_tensor[:, :pos_dim],
-                                             dim=-1).unsqueeze(0)
-                start_rot_objects = torch.cat(
-                    [start_tensor, start_rot_radii], dim=-1).unsqueeze(1)
+                with torch.no_grad():
+                    # Define "object" inputs into policy
+                    # current
+                    cur_pose_tensor = torch.from_numpy(
+                        pose_to_model_input(cur_pose_net[np.newaxis])).to(torch.float32).to(DEVICE)
+                    current = torch.cat(
+                        [cur_pose_tensor, agent_radius_tensor], dim=-1).unsqueeze(1)
+                    # goal
+                    goal_tensor = torch.from_numpy(
+                        pose_to_model_input(goal_pose_net[np.newaxis])).to(torch.float32).to(DEVICE)
+                    goal_radii = goal_radius_scale * torch.norm(
+                        goal_tensor[:, :pos_dim] -
+                        cur_pose_tensor[:, :pos_dim],
+                        dim=-1).unsqueeze(0)
+                    goal_rot_objects = torch.cat(
+                        [goal_tensor, goal_rot_radii], dim=-1).unsqueeze(1)
+                    goal_objects = torch.cat(
+                        [goal_tensor, goal_radii], dim=-1).unsqueeze(1)
+                    # start
+                    start_rot_radii = torch.norm(start_tensor[:, :pos_dim] - cur_pose_tensor[:, :pos_dim],
+                                                dim=-1).unsqueeze(0)
+                    start_rot_objects = torch.cat(
+                        [start_tensor, start_rot_radii], dim=-1).unsqueeze(1)
 
-                # Get policy output, form into action
-                pred_vec, pred_ori, object_forces = policy(current=current,
-                                                           start=start_rot_objects,
-                                                           goal=goal_objects, goal_rot=goal_rot_objects,
-                                                           objects=objects_torch,
-                                                           object_indices=object_idxs_tensor,
-                                                           calc_rot=calc_rot,
-                                                           calc_pos=calc_pos)
-                local_target_pos_world = cur_pose_tensor[0, 0:pos_dim] * Net2World
-                local_target_pos_world = local_target_pos_world + \
-                    dstep * pred_vec[0, :pos_dim]
-                local_target_pos_world = local_target_pos_world.detach().cpu().numpy()
-                local_target_ori = decode_ori(
-                    pred_ori.detach().cpu().numpy()).flatten()
+                    # Get policy output, form into action
+                    pred_vec, pred_ori, object_forces = policy(current=current,
+                                                            start=start_rot_objects,
+                                                            goal=goal_objects, goal_rot=goal_rot_objects,
+                                                            objects=objects_torch,
+                                                            object_indices=object_idxs_tensor,
+                                                            calc_rot=calc_rot,
+                                                            calc_pos=calc_pos)
+                    local_target_pos_world = cur_pose_tensor[0, 0:pos_dim] * Net2World
+                    local_target_pos_world = local_target_pos_world + \
+                        dstep * pred_vec[0, :pos_dim]
+                    local_target_pos_world = local_target_pos_world.detach().cpu().numpy()
+                    local_target_ori = decode_ori(
+                        pred_ori.detach().cpu().numpy()).flatten()
 
-        # Optionally view with ROS
-        if args.view_ros:
-            all_objects = [Object(pos=pose[0:POS_DIM], ori=pose[POS_DIM:],
-                                  radius=radius) for pose, radius in
-                           zip(table_poses_projected_net, object_radii)]
-            all_objects += [
-                Object(
-                    pos=start_pose_net[0:POS_DIM], radius=Params.agent_radius, ori=start_pose_net[POS_DIM:]),
-                Object(
-                    pos=goal_pose_net[0:POS_DIM], radius=Params.agent_radius, ori=goal_pose_net[POS_DIM:]),
-                Object(
-                    pos=cur_pose_net[0:POS_DIM], radius=Params.agent_radius, ori=cur_pose_net[POS_DIM:])
-            ]
-            agent_traj = np.vstack(
-                [cur_pose_net, np.concatenate([Net2World * local_target_pos_world, cur_ori_quat])])
-            if isinstance(object_forces, torch.Tensor):
-                object_forces = object_forces[0].detach().cpu().numpy()
-            viz_3D_publisher.publish(objects=all_objects, agent_traj=agent_traj,
-                                     expert_traj=None, object_colors=all_object_colors,
-                                     object_forces=object_forces, force_colors_rgb=force_colors)
+            # Optionally view with ROS
+            if args.view_ros:
+                all_objects = [Object(pos=pose[0:POS_DIM], ori=pose[POS_DIM:],
+                                    radius=radius) for pose, radius in
+                            zip(table_poses_projected_net, object_radii)]
+                all_objects += [
+                    Object(
+                        pos=start_pose_net[0:POS_DIM], radius=Params.agent_radius, ori=start_pose_net[POS_DIM:]),
+                    Object(
+                        pos=goal_pose_net[0:POS_DIM], radius=Params.agent_radius, ori=goal_pose_net[POS_DIM:]),
+                    Object(
+                        pos=cur_pose_net[0:POS_DIM], radius=Params.agent_radius, ori=cur_pose_net[POS_DIM:])
+                ]
+                agent_traj = np.vstack(
+                    [cur_pose_net, np.concatenate([Net2World * local_target_pos_world, cur_ori_quat])])
+                if isinstance(object_forces, torch.Tensor):
+                    object_forces = object_forces[0].detach().cpu().numpy()
+                viz_3D_publisher.publish(objects=all_objects, agent_traj=agent_traj,
+                                        expert_traj=None, object_colors=all_object_colors,
+                                        object_forces=object_forces, force_colors_rgb=force_colors)
 
-        # Apply low-pass filter to smooth out policy's sudden changes in orientation
-        key_times = [0, 1]
-        rotations = R.from_quat(
-            np.vstack([cur_ori_quat, local_target_ori]))
-        slerp = Slerp(key_times, rotations)
-        alpha = 0.3   # alpha*cur_ori_quat + alpha*local_target_ori
-        interp_rot = slerp([alpha])[0]
+            # Apply low-pass filter to smooth out policy's sudden changes in orientation
+            key_times = [0, 1]
+            rotations = R.from_quat(
+                np.vstack([cur_ori_quat, local_target_ori]))
+            slerp = Slerp(key_times, rotations)
+            alpha = 0.3   # alpha*cur_ori_quat + alpha*local_target_ori
+            interp_rot = slerp([alpha])[0]
 
-        # Clip target EE position to bounds
-        local_target_pos_world = np.clip(local_target_pos_world, a_min=ee_min_pos_world, a_max=ee_max_pos_world)
+            # Clip target EE position to bounds
+            local_target_pos_world = np.clip(local_target_pos_world, a_min=ee_min_pos_world, a_max=ee_max_pos_world)
 
-        # Publish target pose
-        if not DEBUG:
-            target_pose = np.concatenate([local_target_pos_world, interp_rot.as_quat()])
-            pose_pub.publish(pose_to_msg(target_pose))
             # Publish is_intervene
             is_intervene_pub.publish(Bool(is_intervene))
+            # Publish target pose
+            if not DEBUG:
+                target_pose = np.concatenate([local_target_pos_world, interp_rot.as_quat()])
+                pose_pub.publish(pose_to_msg(target_pose))
+                # # Publish is_intervene
+                # is_intervene_pub.publish(Bool(is_intervene))
 
-        # TODO: REMOVE! TEMPORARY
-        if DEBUG:
-            cur_pos_world = local_target_pos_world
-            cur_ori_quat = interp_rot.as_quat()
+            if DEBUG:
+                cur_pos_world = local_target_pos_world
+                cur_ori_quat = interp_rot.as_quat()
 
-        rospy.sleep(0.1)
+            rospy.sleep(0.1)
 
-    print(f"Finished! Error {error} vs tol {tol}")
+        print(f"Finished! Error {error} vs tol {tol}")

@@ -52,7 +52,8 @@ def load_batch(dataset: Dataset, indices: List[int]):
         obj_radii = np.copy(dataset[idx]["object_radii"])[:, np.newaxis]
         obj_types = np.copy(dataset[idx]["object_types"].astype(int))
         goal_radius = np.array([dataset[idx]["goal_radius"]])
-        batch_trajs.append((traj, goal_radius, obj_poses, obj_radii, obj_types))
+        batch_trajs.append(
+            (traj, goal_radius, obj_poses, obj_radii, obj_types))
     return batch_trajs
 
 
@@ -98,8 +99,10 @@ def sample_starts_tgts(traj: np.ndarray, goals_r: np.ndarray,
 
     if train_rot:
         # For training rotation, separate timesteps with zero and nonzero change in orientation
-        dtheta = np.sum(np.abs(traj[1:, pos_dim:] - traj[:-1, pos_dim:]), axis=-1)
-        nonzero_indices = np.where(np.logical_not(np.isclose(dtheta, 0, atol=1e-5)))[0]
+        dtheta = np.sum(
+            np.abs(traj[1:, pos_dim:] - traj[:-1, pos_dim:]), axis=-1)
+        nonzero_indices = np.where(np.logical_not(
+            np.isclose(dtheta, 0, atol=1e-5)))[0]
         zero_indices = np.where(np.isclose(dtheta, 0, atol=1e-5))[0]
 
         # Ensure a certain proportion of samples include non-zero change in orientation
@@ -123,11 +126,13 @@ def sample_starts_tgts(traj: np.ndarray, goals_r: np.ndarray,
         # For position, uniformly sample across trajectory
         cur_indices = np.random.randint(low=0, high=T - 1, size=n_samples)
         future_indices = cur_indices + np.min(
-            np.concatenate([T - (cur_indices[:, np.newaxis] + 1), pred_horizon_rep], axis=-1),
+            np.concatenate(
+                [T - (cur_indices[:, np.newaxis] + 1), pred_horizon_rep], axis=-1),
             axis=-1)
 
     # Calculate
-    currents = traj[cur_indices]  # TODO: Can add noise to current pose while predicting same target
+    # TODO: Can add noise to current pose while predicting same target
+    currents = traj[cur_indices]
     vec = traj[future_indices, 0:pos_dim] - currents[:, 0:pos_dim]
     target_trans = vec / np.linalg.norm(vec, axis=-1)[:, np.newaxis]
 
@@ -197,38 +202,52 @@ def process_batch_data(batch_data, train_rot, n_samples):
         all_obj_idxs.append(obj_idxs)
 
     # Convert to tensors
-    start_tensors = torch.from_numpy(pose_to_model_input(np.vstack(all_starts))).to(torch.float32).to(DEVICE)
-    current_tensors = torch.from_numpy(pose_to_model_input(np.vstack(all_currents))).to(torch.float32).to(DEVICE)
-    goal_tensors = torch.from_numpy(pose_to_model_input(np.vstack(all_goals))).to(torch.float32).to(DEVICE)
-    all_tgt_ori_tensors = torch.from_numpy(np.vstack(all_tgt_ori)).to(torch.float32).to(DEVICE)
-    all_tgt_trans_tensors = torch.from_numpy(np.vstack(all_tgt_trans)).to(torch.float32).to(DEVICE)
-    obj_r_tensors = torch.from_numpy(np.vstack(all_objs_r)).to(torch.float32).to(DEVICE)
-    obj_idx_tensors = torch.from_numpy(np.vstack(all_obj_idxs)).to(torch.long).to(DEVICE)
+    start_tensors = torch.from_numpy(pose_to_model_input(
+        np.vstack(all_starts))).to(torch.float32).to(DEVICE)
+    current_tensors = torch.from_numpy(pose_to_model_input(
+        np.vstack(all_currents))).to(torch.float32).to(DEVICE)
+    goal_tensors = torch.from_numpy(pose_to_model_input(
+        np.vstack(all_goals))).to(torch.float32).to(DEVICE)
+    all_tgt_ori_tensors = torch.from_numpy(
+        np.vstack(all_tgt_ori)).to(torch.float32).to(DEVICE)
+    all_tgt_trans_tensors = torch.from_numpy(
+        np.vstack(all_tgt_trans)).to(torch.float32).to(DEVICE)
+    obj_r_tensors = torch.from_numpy(
+        np.vstack(all_objs_r)).to(torch.float32).to(DEVICE)
+    obj_idx_tensors = torch.from_numpy(
+        np.vstack(all_obj_idxs)).to(torch.long).to(DEVICE)
 
     # Convert to expected model input form: [pose, radius]
     # Object
     # flatten during conversion then reshape back to original shape
     all_objs = np.vstack(all_objs)
     B, n_objects, input_dim = all_objs.shape
-    all_objs = pose_to_model_input(all_objs.reshape([B * n_objects, input_dim])).reshape([B, n_objects, -1])
+    all_objs = pose_to_model_input(all_objs.reshape(
+        [B * n_objects, input_dim])).reshape([B, n_objects, -1])
     obj_tensors = torch.from_numpy(all_objs).to(torch.float32).to(DEVICE)
     object_inputs = torch.cat([obj_tensors, obj_r_tensors], dim=-1)
 
     # Current agent pose in the expected input form
-    agent_radii = torch.tensor([Params.agent_radius], device=DEVICE).view(1, 1).repeat(B, 1)
-    current_inputs = torch.cat([current_tensors, agent_radii], dim=-1).unsqueeze(1)
+    agent_radii = torch.tensor(
+        [Params.agent_radius], device=DEVICE).view(1, 1).repeat(B, 1)
+    current_inputs = torch.cat(
+        [current_tensors, agent_radii], dim=-1).unsqueeze(1)
 
     # Start for model's rotational relation network
-    start_rot_radii = torch.norm(start_tensors[:, 0:pos_dim] - current_tensors[:, 0:pos_dim], dim=-1).unsqueeze(-1)
-    start_rot_inputs = torch.cat([start_tensors, start_rot_radii], dim=-1).unsqueeze(1)
+    start_rot_radii = torch.norm(
+        start_tensors[:, 0:pos_dim] - current_tensors[:, 0:pos_dim], dim=-1).unsqueeze(-1)
+    start_rot_inputs = torch.cat(
+        [start_tensors, start_rot_radii], dim=-1).unsqueeze(1)
 
     # Goal Pos
-    goal_radii = torch.norm(goal_tensors[:, 0:pos_dim] - current_tensors[:, 0:pos_dim], dim=-1).unsqueeze(-1)
+    goal_radii = torch.norm(
+        goal_tensors[:, 0:pos_dim] - current_tensors[:, 0:pos_dim], dim=-1).unsqueeze(-1)
     goal_inputs = torch.cat([goal_tensors, goal_radii], dim=-1).unsqueeze(1)
 
     # Goal for model's rotational relation network
     goal_rot_radii = torch.from_numpy(np.vstack(all_goals_r)).to(DEVICE)
-    goal_rot_inputs = torch.cat([goal_tensors, goal_rot_radii], dim=-1).unsqueeze(1)
+    goal_rot_inputs = torch.cat(
+        [goal_tensors, goal_rot_radii], dim=-1).unsqueeze(1)
 
     return (start_rot_inputs, current_inputs,
             goal_inputs, goal_rot_inputs,
@@ -280,9 +299,11 @@ def batch_inner_loop(model: PolicyNetwork, batch_data: List[Tuple],
                           (1 - torch.bmm(output_y.unsqueeze(1), tgt_y.unsqueeze(-1))).mean())
         else:
             # misalignment between pred and ground truth translation direction
-            theta_loss = (1 - torch.bmm(output_ori.unsqueeze(1), all_tgt_ori_tensors.unsqueeze(-1))).mean()
+            theta_loss = (1 - torch.bmm(output_ori.unsqueeze(1),
+                          all_tgt_ori_tensors.unsqueeze(-1))).mean()
     else:  # train_pos
-        pos_loss = (1 - torch.bmm(output_vec.unsqueeze(1), all_tgt_trans_tensors.unsqueeze(-1))).mean()
+        pos_loss = (1 - torch.bmm(output_vec.unsqueeze(1),
+                    all_tgt_trans_tensors.unsqueeze(-1))).mean()
 
     return pos_loss, theta_loss
 
@@ -301,8 +322,10 @@ def train(model: PolicyNetwork, train_args: argparse.Namespace, saved_root: str,
     """
     buffer_size = 3000  # can reduce if CPU RAM is not enough, just pre-loads data to reduce file reads
     assert train_args.data_name
-    test_dataset = Dataset(root=f"data/{train_args.data_name}_test", buffer_size=buffer_size)
-    train_dataset = Dataset(root=f"data/{train_args.data_name}_train", buffer_size=buffer_size)
+    test_dataset = Dataset(
+        root=f"data/{train_args.data_name}_test", buffer_size=buffer_size)
+    train_dataset = Dataset(
+        root=f"data/{train_args.data_name}_train", buffer_size=buffer_size)
 
     batch_size = train_args.batch_size
     n_samples = train_args.n_samples
@@ -404,7 +427,8 @@ def train(model: PolicyNetwork, train_args: argparse.Namespace, saved_root: str,
             # Optionally save copy of all relevant scripts/files for reproducibility
             os.mkdir(saved_root)
             shutil.copy("model.py", os.path.join(saved_root, "model.py"))
-            shutil.copy("data_params.py", os.path.join(saved_root, "data_params.py"))
+            shutil.copy("data_params.py", os.path.join(
+                saved_root, "data_params.py"))
             shutil.copy("train.py", os.path.join(saved_root, "train.py"))
 
             # Save train args
@@ -412,18 +436,23 @@ def train(model: PolicyNetwork, train_args: argparse.Namespace, saved_root: str,
                 json.dump(vars(train_args), outfile, indent=4)
 
         if epoch % epochs_per_save == 0:
-            torch.save(model.state_dict(), os.path.join(saved_root, "model_%d.h5" % epoch))
+            torch.save(model.state_dict(), os.path.join(
+                saved_root, "model_%d.h5" % epoch))
 
         if epoch % epochs_per_test == 0:
             # Plot losses
-            print("train: %.4f, test: %.4f" % (all_train_losses[-1], all_test_losses[-1]))
-            test_timesteps = np.arange(0, len(all_test_losses)) * epochs_per_test
+            print("train: %.4f, test: %.4f" %
+                  (all_train_losses[-1], all_test_losses[-1]))
+            test_timesteps = np.arange(
+                0, len(all_test_losses)) * epochs_per_test
             plt.plot(all_train_losses, label="train loss")
             plt.plot(all_train_pos_losses, label="train pos loss")
             plt.plot(all_train_ori_losses, label="train theta loss")
             plt.plot(test_timesteps, all_test_losses, label="test loss")
-            plt.plot(test_timesteps, all_test_pos_losses, label="test pos loss")
-            plt.plot(test_timesteps, all_test_ori_losses, label="test theta loss")
+            plt.plot(test_timesteps, all_test_pos_losses,
+                     label="test pos loss")
+            plt.plot(test_timesteps, all_test_ori_losses,
+                     label="test theta loss")
             plt.legend()
             plt.savefig(os.path.join(saved_root, loss_name + ".png"))
             plt.clf()
@@ -432,20 +461,25 @@ def train(model: PolicyNetwork, train_args: argparse.Namespace, saved_root: str,
             # for [ignored, care about, start, goal] objects
             if train_rot:
                 if rot_dim == 2:
-                    cur_offsets = (model.rot_offsets_train.detach().cpu().numpy().flatten() * 180 / np.pi) % 360
-                    actual_offsets = np.rad2deg(Params.ori_offsets_2D).astype(int).tolist()
+                    cur_offsets = (model.rot_offsets_train.detach(
+                    ).cpu().numpy().flatten() * 180 / np.pi) % 360
+                    actual_offsets = np.rad2deg(
+                        Params.ori_offsets_2D).astype(int).tolist()
                     print(f"Learned ({cur_offsets.astype(int)}), "
                           f"actual ({actual_offsets}) theta offsets ")
                 else:
                     cur_offsets = model.rot_offsets_train.detach().cpu().numpy()
-                    cur_offsets = cur_offsets / np.linalg.norm(cur_offsets, axis=-1, keepdims=True)
+                    cur_offsets = cur_offsets / \
+                        np.linalg.norm(cur_offsets, axis=-1, keepdims=True)
                     actual_offsets = Params.ori_offsets_3D
                     print(f"Learned ({cur_offsets})\n"
                           f"actual ({actual_offsets}) quaternion offsets ")
 
     # Save final model
-    print("train: %.4f, test: %.4f" % (all_train_losses[-1], all_test_losses[-1]))
-    torch.save(model.state_dict(), os.path.join(saved_root, "model_%d.h5" % (epoch + 1)))
+    print("train: %.4f, test: %.4f" %
+          (all_train_losses[-1], all_test_losses[-1]))
+    torch.save(model.state_dict(), os.path.join(
+        saved_root, "model_%d.h5" % (epoch + 1)))
 
     test_timesteps = np.arange(0, len(all_test_losses)) * epochs_per_test
     plt.plot(all_train_losses, label="train loss")
@@ -495,18 +529,22 @@ def model_rollout(goal_tensors, current_tensors, start_tensors, goal_rot_inputs,
         goal_radii = goal_pos_radius_scale * torch.norm(goal_tensors[:, :pos_dim] - current_tensors[:, :pos_dim],
                                                         dim=-1).unsqueeze(-1)
         # goal_rot_objects = torch.cat([goal_tensors, goal_rot_radii], dim=-1).unsqueeze(1)
-        goal_inputs = torch.cat([goal_tensors, goal_radii], dim=-1).unsqueeze(1)
+        goal_inputs = torch.cat(
+            [goal_tensors, goal_radii], dim=-1).unsqueeze(1)
 
         start_rot_radii = torch.norm(start_tensors[:, :pos_dim] - current_tensors[:, :pos_dim],
                                      dim=-1).unsqueeze(0)
-        start_rot_inputs = torch.cat([start_tensors, start_rot_radii], dim=-1).unsqueeze(1)
+        start_rot_inputs = torch.cat(
+            [start_tensors, start_rot_radii], dim=-1).unsqueeze(1)
 
-        current_inputs = torch.cat([current_tensors, agent_radii], dim=-1).unsqueeze(1)
+        current_inputs = torch.cat(
+            [current_tensors, agent_radii], dim=-1).unsqueeze(1)
 
         pred_vec, pred_ori, other_vecs = model(current=current_inputs,
                                                start=start_rot_inputs,
                                                goal=goal_inputs, goal_rot=goal_rot_inputs,
-                                               objects=object_inputs[:, k, :, :],
+                                               objects=object_inputs[:,
+                                                                     k, :, :],
                                                object_indices=obj_idx_tensors,
                                                calc_rot=train_rot,
                                                calc_pos=train_pos,
@@ -514,19 +552,23 @@ def model_rollout(goal_tensors, current_tensors, start_tensors, goal_rot_inputs,
 
         if train_pos:
             # NOTE: gradient still flows to earlier timesteps
-            current_tensors[:, :pos_dim] = current_tensors[:, :pos_dim] + pred_vec * dstep
+            current_tensors[:, :pos_dim] = current_tensors[:,
+                                                           :pos_dim] + pred_vec * dstep
         else:
             # use human intervention position trajectory
             try:
-                current_tensors[:, :pos_dim] = torch.clone(intervention_traj[:, k, :pos_dim])
+                current_tensors[:, :pos_dim] = torch.clone(
+                    intervention_traj[:, k, :pos_dim])
             except:
                 break
 
         if train_rot:
-            current_tensors[:, pos_dim:] = pred_ori  # B x 4 so copy over the ori vec
+            # B x 4 so copy over the ori vec
+            current_tensors[:, pos_dim:] = pred_ori
 
         # NOTE: does torch.clone keep gradient? YES
-        pred_traj.append(torch.clone(current_tensors).unsqueeze(1))  # B x 1 x pose_dim
+        # B x 1 x pose_dim
+        pred_traj.append(torch.clone(current_tensors).unsqueeze(1))
 
     pred_traj = torch.cat(pred_traj, dim=1)  # B x T x pose_dim
     return pred_traj
@@ -575,20 +617,24 @@ def adaptation_loss(model: PolicyNetwork, batch_data: List[Tuple], dstep,
         all_objs_r.append(objs_r[np.newaxis])  # 1 x T x 1(n_objs) x 1
         all_obj_idxs.append(obj_idxs[np.newaxis])  # 1 x 1(n_objs) x 2
 
-    all_trajs = np.vstack(all_trajs)  # B x T(Params.max_adaptor_traj_length) x pose_dim
+    # B x T(Params.max_adaptor_traj_length) x pose_dim
+    all_trajs = np.vstack(all_trajs)
     B, T, pose_dim = all_trajs.shape
     if pose_dim == 3:
         pos_dim = 2
     elif pose_dim == 7:
         pos_dim = 3
     else:
-        raise ValueError("pose_dim must be 3(x,y,theta) or 7(x,y,z,qx,qy,qz,qw)")
+        raise ValueError(
+            "pose_dim must be 3(x,y,theta) or 7(x,y,z,qx,qy,qz,qw)")
 
     # Convert to torch tensors
     out_T = T - 1
-    all_trajs = pose_to_model_input(all_trajs.reshape(B * T, -1)).reshape(B, T, -1)
+    all_trajs = pose_to_model_input(
+        all_trajs.reshape(B * T, -1)).reshape(B, T, -1)
     traj_tensors = torch.from_numpy(all_trajs).to(torch.float32).to(DEVICE)
-    agent_radii = torch.tensor([Params.agent_radius], device=DEVICE).view(1, 1).repeat(B, 1)
+    agent_radii = torch.tensor(
+        [Params.agent_radius], device=DEVICE).view(1, 1).repeat(B, 1)
 
     start_tensors = torch.from_numpy(
         pose_to_model_input(np.vstack(all_starts))).to(torch.float32).to(DEVICE)
@@ -598,18 +644,23 @@ def adaptation_loss(model: PolicyNetwork, batch_data: List[Tuple], dstep,
         pose_to_model_input(np.vstack(all_goals))).to(torch.float32).to(DEVICE)
     goal_rot_radii = torch.from_numpy(
         np.vstack(all_goal_rot_rs)).to(DEVICE).to(torch.float32).view(1, 1).repeat(B, 1)
-    goal_rot_inputs = torch.cat([goal_tensors, goal_rot_radii], dim=-1).unsqueeze(1)
+    goal_rot_inputs = torch.cat(
+        [goal_tensors, goal_rot_radii], dim=-1).unsqueeze(1)
 
     all_objs = np.vstack(all_objs)
     B, _, n_objects, input_dim = all_objs.shape
-    all_objs = pose_to_model_input(all_objs.reshape(B * T * n_objects, input_dim)).reshape(B, T, n_objects, -1)
+    all_objs = pose_to_model_input(all_objs.reshape(
+        B * T * n_objects, input_dim)).reshape(B, T, n_objects, -1)
     obj_tensors = torch.from_numpy(all_objs).to(torch.float32).to(DEVICE)
-    obj_r_tensors = torch.from_numpy(np.vstack(all_objs_r)).to(torch.float32).to(DEVICE)
-    obj_idx_tensors = torch.from_numpy(np.vstack(all_obj_idxs)).to(torch.long).to(DEVICE)
+    obj_r_tensors = torch.from_numpy(
+        np.vstack(all_objs_r)).to(torch.float32).to(DEVICE)
+    obj_idx_tensors = torch.from_numpy(
+        np.vstack(all_obj_idxs)).to(torch.long).to(DEVICE)
     try:
         object_inputs = torch.cat([obj_tensors, obj_r_tensors], dim=-1)
     except:
-        object_inputs = torch.cat([obj_tensors, obj_r_tensors.unsqueeze(-1)], dim=-1)
+        object_inputs = torch.cat(
+            [obj_tensors, obj_r_tensors.unsqueeze(-1)], dim=-1)
     # if object_inputs assumed fixed for all timesteps, just repeat
     if object_inputs.shape[1] == 1:
         object_inputs = object_inputs.repeat(1, T, 1, 1)
@@ -642,7 +693,8 @@ def adaptation_loss(model: PolicyNetwork, batch_data: List[Tuple], dstep,
         output_ori = pred_traj[:, :out_T, pos_dim:].squeeze(0)
         target_ori = traj_tensors[:, :out_T, pos_dim:].squeeze(0)
         if pos_dim == 2:
-            theta_loss = (1 - torch.bmm(output_ori.unsqueeze(1), target_ori.unsqueeze(-1))).mean()
+            theta_loss = (1 - torch.bmm(output_ori.unsqueeze(1),
+                          target_ori.unsqueeze(-1))).mean()
         else:
             output_x = output_ori[:, 0:3]
             output_y = output_ori[:, 3:6]
@@ -694,6 +746,7 @@ def perform_adaptation(policy: Policy, batch_data: List[Tuple],
                                               dstep=dstep)
         return [loss.item()], pred_traj
 
+    results = []
     for iteration in range(n_adapt_iters):
         loss, pred_traj = adaptation_loss(model=policy.policy_network,
                                           batch_data=batch_data,
@@ -704,11 +757,15 @@ def perform_adaptation(policy: Policy, batch_data: List[Tuple],
         loss.backward()
         if verbose:
             for p in adaptable_parameters:
-                print("p.grad: ", p.grad)
+                print(f"p: {p}, p.grad: {p.grad}")
 
         optimizer.step()
         if verbose:
             print("iter %d loss: %.3f" % (iteration + 1, loss.item()))
+
+        results.append([param.detach().cpu().numpy()
+                       for param in adaptable_parameters] + [loss.item()])
+    np.save("debug_rot_adaptation_results.npy", np.array(results))
 
     # Clip learned features within expected range
     if clip_params:
@@ -719,21 +776,30 @@ def perform_adaptation(policy: Policy, batch_data: List[Tuple],
 
 def parse_arguments():
     parser = argparse.ArgumentParser()
-    parser.add_argument('--model_name', action='store', type=str, help="trained model name")
-    parser.add_argument('--data_name', action='store', type=str, help="data folder name")
+    parser.add_argument('--model_name', action='store',
+                        type=str, help="trained model name")
+    parser.add_argument('--data_name', action='store',
+                        type=str, help="data folder name")
     parser.add_argument('--loaded_epoch', action='store', type=int,
                         default=0, help="training epoch of pretrained model to load from")
-    parser.add_argument('--is_rot', action='store_true', help="whether to train rotation network")
-    parser.add_argument('--is_3D', action='store_true', help="whether to use 3D data")
+    parser.add_argument('--is_rot', action='store_true',
+                        help="whether to train rotation network")
+    parser.add_argument('--is_3D', action='store_true',
+                        help="whether to use 3D data")
 
     # Default hyperparameters used for paper experiments, no need to tune to reproduce
-    parser.add_argument('--lr', action='store', type=float, default=1e-3, help="learning rate")
-    parser.add_argument('--batch_size', action='store', type=int, default=16)
+    parser.add_argument('--lr', action='store', type=float,
+                        default=1e-3, help="learning rate")
+    parser.add_argument('--batch_size', action='store',
+                        type=int, default=16)
     parser.add_argument('--n_samples', action='store', type=int, default=32,
                         help="number of wpt samples to draw from each trajectory sample")
-    parser.add_argument('--hidden_dim', action='store', type=int, default=64)
-    parser.add_argument('--pos_preference_dim', action='store', type=int, default=1)
-    parser.add_argument('--rot_preference_dim', action='store', type=int, default=1)
+    parser.add_argument('--hidden_dim', action='store',
+                        type=int, default=64)
+    parser.add_argument('--pos_preference_dim',
+                        action='store', type=int, default=1)
+    parser.add_argument('--rot_preference_dim',
+                        action='store', type=int, default=1)
 
     return parser.parse_args()
 

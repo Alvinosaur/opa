@@ -325,6 +325,8 @@ def main():
                     perturb_pos_traj_net = np.vstack([init_perturb_pos_net, init_perturb_pos_net])
                     perturb_ori_traj = np.vstack([perturb_traj_sim[-1][1], perturb_traj_sim[-1][1]])
                     perturb_traj = np.hstack([perturb_pos_traj_net, perturb_ori_traj])
+                    perturb_traj[:, 3:] = np.array([-0.0425496 ,  0.83507133,
+        -0.32263005,  0.44357118])
                     batch_data = [
                         (perturb_traj, start_pose_net, goal_pose_net, goal_rot_radius,
                          object_poses_net[np.newaxis].repeat(T, axis=0),
@@ -340,7 +342,7 @@ def main():
                     perform_adaptation(policy=policy, batch_data=batch_data,
                                        train_pos=train_pos, train_rot=train_rot,
                                        n_adapt_iters=num_rot_net_updates, dstep=dstep,
-                                       verbose=False, clip_params=True)
+                                       verbose=True, clip_params=True)
                     print("New pref feats: ", torch.cat(policy.obj_rot_feats, dim=0).detach().cpu().numpy())
                     print("New rot offset: ", torch.stack(policy.obj_rot_offsets).detach().cpu().numpy())
 
