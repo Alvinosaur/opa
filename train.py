@@ -496,12 +496,24 @@ def train(model: PolicyNetwork, train_args: argparse.Namespace, saved_root: str,
              test=all_test_losses, test_pos=all_test_pos_losses, test_theta=all_test_ori_losses)
 
 
-def model_rollout(goal_tensors, current_tensors, start_tensors, goal_rot_inputs,
+def model_rollout_wrapper(model, processed_sample, dstep, train_pos, train_rot, goal_pos_radius_scale=1.0):
+    (start_tensors, current_inputs,
+     goal_tensors, goal_rot_inputs,
+     object_inputs, obj_type_tensors,
+     all_tgt_ori_tensors, all_tgt_trans_tensors, expert_traj_tensor) = processed_sample
+
+    T = start_tensors.shape[0]
+    return model_rollout(goal_tensors=goal_tensors, current_inputs=current_inputs, 
+                          start_tensors=start_tensors, goal_rot_inputs=goal_rot_inputs,
+                          object_inputs=object_inputs, obj_idx_tensors=obj_type_tensors,
+                          model=model, out_T=T-1, goal_pos_radius_scale=goal_pos_radius_scale,
+                          dstep=dstep, train_pos=train_pos, train_rot=train_rot, pos_dim=pos_dim, expert_traj=expert_traj_tensor)
+
+
+def model_rollout(goal_tensors, current_inputs, start_tensors, goal_rot_inputs,
                   object_inputs, obj_idx_tensors,
-                  intervention_traj,
-                  model: PolicyNetwork,
-                  agent_radii, out_T, goal_pos_radius_scale, dstep,
-                  train_pos, train_rot, pos_dim):
+                  model: PolicyNetwork, out_T, goal_pos_radius_scale, dstep,
+                  train_pos, train_rot, pos_dim, expert_traj=None):
     """
     Rollout model starting from current tensor for out_T timesteps. Recursively
     modifies current pose with predicted action to preserve gradient pipeline.
@@ -509,7 +521,7 @@ def model_rollout(goal_tensors, current_tensors, start_tensors, goal_rot_inputs,
         or their trajectories are assumed predictable.
 
     :param goal_tensors: goal poses  (B x pose_dim)
-    :param current_tensors: current poses (B x pose_dim)
+    :param current_inputs: current poses (B x pose_dim+1)
     :param start_tensors: start poses (B x pose_dim)
     :param goal_rot_inputs: goal rotation inputs (B x pose_dim)
     :param object_inputs: object poses (B x T x n_objs x pose_dim+1)
@@ -524,6 +536,9 @@ def model_rollout(goal_tensors, current_tensors, start_tensors, goal_rot_inputs,
     :param train_rot: whether to train rotation
     :return: predicted trajectory as tensor (B x out_T x pos_dim+ori_dim)
     """
+    if not train_pos: 
+        assert expert_traj is not None
+
     pred_traj = []
     for k in range(out_T):
         goal_radii = goal_pos_radius_scale * torch.norm(goal_tensors[:, :pos_dim] - current_tensors[:, :pos_dim],
@@ -537,9 +552,6 @@ def model_rollout(goal_tensors, current_tensors, start_tensors, goal_rot_inputs,
         start_rot_inputs = torch.cat(
             [start_tensors, start_rot_radii], dim=-1).unsqueeze(1)
 
-        current_inputs = torch.cat(
-            [current_tensors, agent_radii], dim=-1).unsqueeze(1)
-
         pred_vec, pred_ori, other_vecs = model(current=current_inputs,
                                                start=start_rot_inputs,
                                                goal=goal_inputs, goal_rot=goal_rot_inputs,
@@ -552,164 +564,165 @@ def model_rollout(goal_tensors, current_tensors, start_tensors, goal_rot_inputs,
 
         if train_pos:
             # NOTE: gradient still flows to earlier timesteps
-            current_tensors[:, :pos_dim] = current_tensors[:,
+            current_inputs[:, :pos_dim] = current_inputs[:,
                                                            :pos_dim] + pred_vec * dstep
         else:
             # use human intervention position trajectory
             try:
-                current_tensors[:, :pos_dim] = torch.clone(
-                    intervention_traj[:, k, :pos_dim])
+                current_inputs[:, :pos_dim] = torch.clone(
+                    expert_traj[:, k, :pos_dim])
             except:
                 break
 
         if train_rot:
             # B x 4 so copy over the ori vec
-            current_tensors[:, pos_dim:] = pred_ori
+            current_inputs[:, pos_dim:-1] = pred_ori
 
         # NOTE: does torch.clone keep gradient? YES
         # B x 1 x pose_dim
-        pred_traj.append(torch.clone(current_tensors).unsqueeze(1))
+        pred_traj.append(torch.clone(current_inputs[:, 0:-1]).unsqueeze(1))
 
     pred_traj = torch.cat(pred_traj, dim=1)  # B x T x pose_dim
     return pred_traj
 
 
-def adaptation_loss(model: PolicyNetwork, batch_data: List[Tuple], dstep,
-                    train_pos=True, train_rot=False,
-                    goal_pos_radius_scale=1.0):
-    """
-    Calculates loss for online adaptation to human intervention.
-    Unlike batch_inner_loop, which randomly samples timesteps from trajectory,
-    this function uses ALL timesteps in trajectory. Also, this function
-    computes loss by rolling out agent prediction recursively for multiple timesteps.
-    This is important because gradients from the final timestep's loss still
-    flow back to earlier timesteps as well.
+def process_single_full_traj(sample, n_samples=np.Inf):
+    (traj, start, goal, goals_r, objs, objs_r, obj_idxs) = sample
+    T = traj.shape[0]
+    assert traj.shape[1] in [3, 7]
+    is_3D = traj.shape[1] == 3 + 4  # x, y, z, qw, qx, qy, qz
+    pos_dim = 3 if is_3D else 2
 
-    :param model: Model to train
-    :param batch_data: Batch of data to adapt to
-    :param dstep: distance to translate by each timestep using agent's predicted direction vector
-    :param train_pos: whether to train position
-           NOTE: both position and rotation can be trained simultaneously for adaptation
-    :param train_rot: whether to train rotation
-    :param goal_pos_radius_scale: rather than define goal radius as exactly
-                the distance to agent, scale down by some factor
-    :return: overall loss (torch.Tensor), rollout trajectory (B x T x pos_dim+rot_dim)(torch.Tensor)
-    """
-
-    # Collect all data (only one trajectory immediately after human intervention)
-    all_starts = []
-    all_currents = []
-    all_trajs = []
-    all_goals = []
-    all_goal_rot_rs = []
-    all_objs = []
-    all_objs_r = []
-    all_obj_idxs = []
-    for sample in batch_data:
-        (traj, original_start, goal, goal_rot_r, objs, objs_r, obj_idxs) = sample
-        current = traj[0]
-        all_starts.append(original_start[np.newaxis])
-        all_currents.append(current[np.newaxis])
-        all_trajs.append(traj[np.newaxis])  # T x pose_dim
-        all_goals.append(goal[np.newaxis])
-        all_goal_rot_rs.append(np.array([[goal_rot_r]]))  # 1 x 1
-        all_objs.append(objs[np.newaxis])  # 1 x T x 1(n_objs) x pose_dim
-        all_objs_r.append(objs_r[np.newaxis])  # 1 x T x 1(n_objs) x 1
-        all_obj_idxs.append(obj_idxs[np.newaxis])  # 1 x 1(n_objs) x 2
-
-    # B x T(Params.max_adaptor_traj_length) x pose_dim
-    all_trajs = np.vstack(all_trajs)
-    B, T, pose_dim = all_trajs.shape
-    if pose_dim == 3:
-        pos_dim = 2
-    elif pose_dim == 7:
-        pos_dim = 3
+    if np.isinf(n_samples):
+        currents = traj[0:-1]  # (B=T) x pose_dim
+        objs = objs[0:-1]  # (B=T) x n_objs x pose_dim
+        objs_r = objs_r[0:-1]  # (B=T) x n_objs x 1
+        targets = traj[1:]  # (B=T) x pose_dim
+        n_samples = currents.shape[0]
     else:
-        raise ValueError(
-            "pose_dim must be 3(x,y,theta) or 7(x,y,z,qx,qy,qz,qw)")
+        rand_indices = np.random.randint(0, len(traj) - 2, n_samples)
+        currents = traj[rand_indices]
+        objs = objs[rand_indices]
+        objs_r = objs_r[rand_indices]
+        targets = traj[rand_indices + 1]
 
-    # Convert to torch tensors
-    out_T = T - 1
-    all_trajs = pose_to_model_input(
-        all_trajs.reshape(B * T, -1)).reshape(B, T, -1)
-    traj_tensors = torch.from_numpy(all_trajs).to(torch.float32).to(DEVICE)
+    vec = targets[:, 0:pos_dim] - currents[:, 0:pos_dim]
+    target_trans = vec / np.linalg.norm(vec, axis=-1)[:, np.newaxis]
+
+    if is_3D:
+        target_ori = encode_ori_3D(targets[:, pos_dim:])
+    else:
+        target_ori = encode_ori_2D(targets[:, -1])
+
+    # Start
+    all_starts = start[np.newaxis].repeat(n_samples, axis=0)
+    all_currents = currents
+
+    # Goal
+    all_goals = goal[np.newaxis].repeat(n_samples, axis=0)
+    all_goals_r = np.array(goals_r).reshape(1, 1).repeat(n_samples, axis=0)
+
+    # Objects
+    all_objs = objs
+    all_objs_r = objs_r
+    all_obj_idxs = obj_idxs[np.newaxis].repeat(n_samples, axis=0)
+
+    # Convert to tensors
+    start_tensors = torch.from_numpy(pose_to_model_input(
+        all_starts)).to(torch.float32).to(DEVICE)
+    current_tensors = torch.from_numpy(pose_to_model_input(
+        all_currents)).to(torch.float32).to(DEVICE)
+    goal_tensors = torch.from_numpy(pose_to_model_input(
+        all_goals)).to(torch.float32).to(DEVICE)
+    obj_r_tensors = torch.from_numpy(
+        all_objs_r).to(torch.float32).to(DEVICE)
+    obj_idx_tensors = torch.from_numpy(
+        all_obj_idxs).to(torch.long).to(DEVICE)
+
+    # Convert to expected model input form: [pose, radius]
+    # Object
+    # flatten during conversion then reshape back to original shape
+    T, n_objects, _ = all_objs.shape
+    all_objs = pose_to_model_input(all_objs.reshape(
+        [T * n_objects, -1])).reshape([T, n_objects, -1])
+
+    obj_tensors = torch.from_numpy(all_objs).to(torch.float32).to(DEVICE)
+    object_inputs = torch.cat([obj_tensors, obj_r_tensors], dim=-1)
+
+    # Current agent pose in the expected input form
     agent_radii = torch.tensor(
-        [Params.agent_radius], device=DEVICE).view(1, 1).repeat(B, 1)
+        [Params.agent_radius], device=DEVICE).view(1, 1).repeat(T, 1)
+    current_inputs = torch.cat(
+        [current_tensors, agent_radii], dim=-1).unsqueeze(1)
 
-    start_tensors = torch.from_numpy(
-        pose_to_model_input(np.vstack(all_starts))).to(torch.float32).to(DEVICE)
-    current_tensors = torch.from_numpy(
-        pose_to_model_input(np.vstack(all_currents))).to(torch.float32).to(DEVICE)
-    goal_tensors = torch.from_numpy(
-        pose_to_model_input(np.vstack(all_goals))).to(torch.float32).to(DEVICE)
+    # Goal for model's rotational relation network
     goal_rot_radii = torch.from_numpy(
-        np.vstack(all_goal_rot_rs)).to(DEVICE).to(torch.float32).view(1, 1).repeat(B, 1)
+        np.vstack(all_goals_r)).to(torch.float32).to(DEVICE)
     goal_rot_inputs = torch.cat(
         [goal_tensors, goal_rot_radii], dim=-1).unsqueeze(1)
 
-    all_objs = np.vstack(all_objs)
-    B, _, n_objects, input_dim = all_objs.shape
-    all_objs = pose_to_model_input(all_objs.reshape(
-        B * T * n_objects, input_dim)).reshape(B, T, n_objects, -1)
-    obj_tensors = torch.from_numpy(all_objs).to(torch.float32).to(DEVICE)
-    obj_r_tensors = torch.from_numpy(
-        np.vstack(all_objs_r)).to(torch.float32).to(DEVICE)
-    obj_idx_tensors = torch.from_numpy(
-        np.vstack(all_obj_idxs)).to(torch.long).to(DEVICE)
-    try:
-        object_inputs = torch.cat([obj_tensors, obj_r_tensors], dim=-1)
-    except:
-        object_inputs = torch.cat(
-            [obj_tensors, obj_r_tensors.unsqueeze(-1)], dim=-1)
-    # if object_inputs assumed fixed for all timesteps, just repeat
-    if object_inputs.shape[1] == 1:
-        object_inputs = object_inputs.repeat(1, T, 1, 1)
+    all_tgt_ori_tensors = torch.from_numpy(
+        np.vstack(target_ori)).to(torch.float32).to(DEVICE)
+    all_tgt_trans_tensors = torch.from_numpy(
+        np.vstack(target_trans)).to(torch.float32).to(DEVICE)
+    return (start_tensors, current_inputs,
+            goal_tensors, goal_rot_inputs,
+            object_inputs, obj_idx_tensors,
+            all_tgt_ori_tensors, all_tgt_trans_tensors)
 
-    # Perform agent prediction rollout
-    pred_traj = model_rollout(goal_tensors=goal_tensors, current_tensors=current_tensors,
-                              start_tensors=start_tensors, goal_rot_inputs=goal_rot_inputs,
-                              object_inputs=object_inputs, obj_idx_tensors=obj_idx_tensors,
-                              intervention_traj=traj_tensors,
-                              model=model,
-                              agent_radii=agent_radii, out_T=out_T,
-                              goal_pos_radius_scale=goal_pos_radius_scale, dstep=dstep,
-                              train_pos=train_pos, train_rot=train_rot, pos_dim=pos_dim)
 
-    # Compute loss
-    loss = torch.tensor([0.0], device=DEVICE)
-    if train_pos:
-        # Upon post-analysis, we get more stable adaptation when using a different
-        # loss function at adaptation time for position:
-        # Calculate distance with each object for both human intervention and agent rollout
-        # and measure difference in object distances
-        gt_dists = torch.norm(traj_tensors[:, 1:, :pos_dim] -
-                              object_inputs[:, 1:, 0, :pos_dim], dim=-1, keepdim=True)
-        pred_dists = torch.norm(pred_traj[:, :, :pos_dim] -
-                                object_inputs[:, 1:, 0, :pos_dim], dim=-1, keepdim=True)
-        pos_loss = torch.abs(gt_dists - pred_dists).mean()
-        loss += pos_loss
+def adaptation_loss(model: PolicyNetwork, processed_sample: Tuple,
+                    train_pos, train_rot, is_3D):
+    (start_tensors, current_inputs,
+     goal_tensors, goal_rot_inputs,
+     object_inputs, obj_type_tensors,
+     all_tgt_ori_tensors, all_tgt_trans_tensors) = processed_sample
+    pos_dim = 3 if is_3D else 2
 
+    # Start for model's rotational relation network
+    start_rot_radii = torch.norm(
+        start_tensors[:, 0:pos_dim] - current_inputs[:, 0, 0:pos_dim], dim=-1).unsqueeze(-1)
+    start_rot_inputs = torch.cat(
+        [start_tensors, start_rot_radii], dim=-1).unsqueeze(1)
+
+    # Goal Pos
+    goal_radii = torch.norm(
+        goal_tensors[:, 0:pos_dim] - current_inputs[:, 0, 0:pos_dim], dim=-1).unsqueeze(-1)
+    goal_inputs = torch.cat([goal_tensors, goal_radii], dim=-1).unsqueeze(1)
+
+    output_vec, output_ori, pos_effects = model(current=current_inputs,
+                                                start=start_rot_inputs,
+                                                goal=goal_inputs, goal_rot=goal_rot_inputs,
+                                                objects=object_inputs,
+                                                object_indices=obj_type_tensors,
+                                                calc_pos=train_pos,
+                                                calc_rot=train_rot,
+                                                is_training=False)
+
+    pos_loss = torch.tensor([0.0], device=DEVICE)
+    theta_loss = torch.tensor([0.0], device=DEVICE)
     if train_rot:
-        output_ori = pred_traj[:, :out_T, pos_dim:].squeeze(0)
-        target_ori = traj_tensors[:, :out_T, pos_dim:].squeeze(0)
-        if pos_dim == 2:
-            theta_loss = (1 - torch.bmm(output_ori.unsqueeze(1),
-                          target_ori.unsqueeze(-1))).mean()
-        else:
+        if is_3D:
             output_x = output_ori[:, 0:3]
             output_y = output_ori[:, 3:6]
-            tgt_x = target_ori[:, 0:3]
-            tgt_y = target_ori[:, 3:6]
+            tgt_x = all_tgt_ori_tensors[:, 0:3]
+            tgt_y = all_tgt_ori_tensors[:, 3:6]
+            # misalignment between pred and ground truth x and y axes of rotation matrix
             theta_loss = ((1 - torch.bmm(output_x.unsqueeze(1), tgt_x.unsqueeze(-1))).mean() +
                           (1 - torch.bmm(output_y.unsqueeze(1), tgt_y.unsqueeze(-1))).mean())
+        else:
+            # misalignment between pred and ground truth translation direction
+            theta_loss = (1 - torch.bmm(output_ori.unsqueeze(1),
+                          all_tgt_ori_tensors.unsqueeze(-1))).mean()
+    else:  # train_pos
+        pos_loss = (1 - torch.bmm(output_vec.unsqueeze(1),
+                    all_tgt_trans_tensors.unsqueeze(-1))).mean()
 
-        loss += theta_loss
-
-    return loss, pred_traj
+    return pos_loss, theta_loss
 
 
-def perform_adaptation(policy: Policy, batch_data: List[Tuple],
-                       train_pos: bool, train_rot: bool,
+def perform_adaptation(policy: Policy, processed_sample: Tuple,
+                       train_pos: bool, train_rot: bool, is_3D: bool,
                        n_adapt_iters: int, dstep: float,
                        verbose=False, clip_params=True):
     """
@@ -740,18 +753,20 @@ def perform_adaptation(policy: Policy, batch_data: List[Tuple],
     if n_adapt_iters == 0:
         # Don't perform any update, but return loss and predicted trajectory
         with torch.no_grad():
-            loss, pred_traj = adaptation_loss(model=policy.policy_network,
-                                              batch_data=batch_data,
-                                              train_pos=train_pos, train_rot=train_rot,
-                                              dstep=dstep)
+            pos_loss, rot_loss = adaptation_loss(model=policy.policy_network,
+                                                 processed_sample=processed_sample,
+                                                 train_pos=train_pos, train_rot=train_rot,
+                                                 is_3D=is_3D)
+            loss = pos_loss + rot_loss
         return [loss.item()], pred_traj
 
-    results = []
+    # results = []
     for iteration in range(n_adapt_iters):
-        loss, pred_traj = adaptation_loss(model=policy.policy_network,
-                                          batch_data=batch_data,
-                                          train_pos=train_pos, train_rot=train_rot,
-                                          dstep=dstep)
+        pos_loss, rot_loss = adaptation_loss(model=policy.policy_network,
+                                             processed_sample=processed_sample,
+                                             train_pos=train_pos, train_rot=train_rot,
+                                             is_3D=is_3D)
+        loss = pos_loss + rot_loss
         losses.append(loss.item())
         optimizer.zero_grad()
         loss.backward()
@@ -763,9 +778,9 @@ def perform_adaptation(policy: Policy, batch_data: List[Tuple],
         if verbose:
             print("iter %d loss: %.3f" % (iteration + 1, loss.item()))
 
-        results.append([param.detach().cpu().numpy()
-                       for param in adaptable_parameters] + [loss.item()])
-    np.save("debug_rot_adaptation_results.npy", np.array(results))
+    #     results.append([param.detach().cpu().numpy()
+    #                    for param in adaptable_parameters] + [loss.item()])
+    # np.save("debug_rot_adaptation_results.npy", np.array(results))
 
     # Clip learned features within expected range
     if clip_params:

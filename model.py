@@ -500,8 +500,7 @@ class PolicyNetwork(nn.Module):
         # Compute feature: sign of direction to each object wrt direction to goal
         pos_input_vecs = input_poses[:, :,
                                      self.pos_idxs] - agent_pose[:, :, self.pos_idxs]
-        pos_input_vecs = pos_input_vecs / \
-            torch.norm(pos_input_vecs, dim=-1, keepdim=True)
+        pos_input_vecs = pos_input_vecs / (torch.norm(pos_input_vecs, dim=-1, keepdim=True) + 1e-6)
         # (B x K x 2) * (B x 2) = (B x K) dot-prod between all vecs and the goal-agent vecs
         sign_wrt_goal = torch.einsum(
             'bki,bi->bk', pos_input_vecs[:, :], pos_input_vecs[:, -1])
@@ -614,7 +613,7 @@ class Policy(object):
 
         # self.pos_ignore_feat = self.policy_network.pos_pref_feat_train[Params.GOAL_IDX].detach()
 
-        b = 0.75  # TODO: Tune this after training using viz_3D.py
+        b = 0.7  # TODO: Tune this after training using viz_3D.py
         self.rot_ignore_feat = (b * rot_ignore_feat + (1 - b) * rot_care_feat)
 
         self.obj_pos_feats = []

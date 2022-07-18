@@ -6,7 +6,8 @@ For a copy, see <https://opensource.org/licenses/MIT>.
 import numpy as np
 
 # define robot limits and params
-ik_kwargs = dict(pos_tolerance=5e-1, ori_tolerance=5e-1)  # inverse kinematics solver params
+# inverse kinematics solver params
+ik_kwargs = dict(pos_tolerance=5e-1, ori_tolerance=5e-1)
 custom_limits = {
     1: np.array([-355, 355]) * np.pi / 180.0,
     2: np.array([-140, 140]) * np.pi / 180.0,
@@ -26,7 +27,7 @@ POS_DIM = 3
 goal_radius_scale = 0.5
 
 # Number of adaptation steps for Position and Rotation Networks
-num_pos_net_updates = 5
+num_pos_net_updates = 10
 num_rot_net_updates = 20
 
 # Arbitrary orientation for tasks that don't involve orientation

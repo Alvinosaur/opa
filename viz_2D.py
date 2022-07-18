@@ -17,7 +17,7 @@ import matplotlib.colors as mcolors
 
 import torch
 
-from train import perform_adaptation, DEVICE
+from train import model_rollout, model_rollout_wrapper, perform_adaptation, DEVICE, process_single_full_traj
 from elastic_band import Object
 from data_params import Params
 from model import Policy, PolicyNetwork, pose_to_model_input, decode_ori
@@ -384,10 +384,11 @@ def viz_adaptation(policy: Policy, test_data_root: str, train_pos, train_rot):
         goal = expert_traj[-1]
         num_objects = len(object_types)
         object_idxs = np.arange(num_objects)  # NOTE: rather, object indices should be actual indices, not types
-        batch_data = (expert_traj, start, goal, goal_radius,
+        sample = (expert_traj, start, goal, goal_radius,
                       object_poses[np.newaxis, :, :].repeat(T, axis=0),  # repeat for T timesteps unless object can move
                       object_radii[np.newaxis, :, np.newaxis].repeat(T, axis=0),  # repeat for T timesteps
                       object_idxs)
+        processed_sample = process_single_full_traj(sample)
 
         objects = [
             Object(pos=object_poses[i][0:POS_DIM], radius=object_radii[i],
@@ -406,10 +407,12 @@ def viz_adaptation(policy: Policy, test_data_root: str, train_pos, train_rot):
         total_updates = 0
         for num_updates in num_updates_series:
             total_updates += num_updates
-            losses, pred_traj = perform_adaptation(policy, [batch_data],
-                                                   train_pos=train_pos, train_rot=train_rot,
-                                                   n_adapt_iters=num_updates, dstep=Params.dstep_2D,
-                                                   verbose=False, clip_params=True)
+            losses = perform_adaptation(policy, processed_sample=processed_sample,
+                                        train_pos=train_pos, train_rot=train_rot,
+                                        n_adapt_iters=num_updates, dstep=Params.dstep_2D,
+                                        verbose=False, clip_params=True, is_3D=False)
+            pred_traj = model_rollout_wrapper(policy.policy_network, processed_sample, dstep=Params.dstep_2D, 
+            train_pos=train_pos, train_rot=train_rot)
             pred_traj = pred_traj[0].detach().cpu().numpy()  # remove batch dimension
 
             # Convert <cos, sin> representation back to theta

@@ -6,13 +6,38 @@ For a copy, see <https://opensource.org/licenses/MIT>.
 import numpy as np
 import ipdb
 
+from scipy.spatial.transform import Rotation as R
+from scipy.spatial.transform import Slerp
+
 from pybullet_tools.kuka_primitives import BodyConf, BodyPath, Command
 from pybullet_tools.utils import *
 
 
+class RunningAverage(object):
+    def __init__(self, length, init_vals) -> None:
+        self.length = length
+        self.values = [init_vals] * length
+        self.count = 0
+        self.avg = init_vals
+
+    def update(self, val):
+        self.values[self.count % self.length] = val
+        self.count += 1
+        self.avg = sum(self.values) / min(self.count, self.length)
+
 def sigint_handler(signal, frame):
     # Force scripts to exit cleanly
     exit()
+
+
+def interpolate_rotations(start_quat, stop_quat, alpha):
+    key_times = [0, 1]
+    rotations = R.from_quat(
+        np.vstack([start_quat, stop_quat]))
+    slerp = Slerp(key_times, rotations)
+    alpha = 0.3   # alpha*cur_ori_quat + alpha*local_target_ori
+    interp_rot = slerp([alpha])[0]
+    return interp_rot.as_quat()
 
 
 def plan_step(robot: int, tool_link: int, target_pose: Pose, obstacles: list,

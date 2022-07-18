@@ -254,7 +254,7 @@ class Viz3DROSPublisher(object):
         self.expert_pose_pub = rospy.Publisher('expert', PoseStamped, queue_size=10)
 
     def publish(self, objects: List[Object], object_colors,
-                agent_traj: np.ndarray, expert_traj: np.ndarray = None,
+                agent_traj: np.ndarray = None, expert_traj: np.ndarray = None,
                 object_forces: np.ndarray = None, force_colors_rgb: List[Tuple] = None):
         """
         Repeatedly call this function to update visualization.
@@ -263,7 +263,9 @@ class Viz3DROSPublisher(object):
         publish_objects(object_pub=self.object_pub, pose_pubs=self.pose_pubs,
                         obj_colors_rgb=object_colors, objects=objects)
 
-        self.agent_path_pub.publish(path_from_traj(agent_traj))
+        if agent_traj is not None:
+            self.agent_path_pub.publish(path_from_traj(agent_traj))
+
         if expert_traj is not None:
             # NOTE: expert_traj should dynamically change to be similar
             #   length as agent traj
