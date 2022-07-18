@@ -607,7 +607,7 @@ class Policy(object):
         rot_care_feat = self.policy_network.rot_pref_feat_train[Params.CARE_ROT_IDX].detach(
         )
 
-        a = 0.4  # TODO: Tune this after training using viz_3D.py
+        a = 0.5  # TODO: Tune this after training using viz_3D.py
         self.pos_ignore_feat = (a * pos_repel_feat +
                                 (1 - a) * pos_attract_feat)
 

@@ -20,7 +20,7 @@ from std_msgs.msg import Bool
 import torch
 
 from model import Policy, PolicyNetwork, pose_to_model_input, decode_ori
-from train import perform_adaptation, adaptation_loss, process_single_full_traj, DEVICE
+from train import random_seed_adaptation, process_single_full_traj, DEVICE
 from data_params import Params
 from exp_params import *
 from exp_utils import *
@@ -107,16 +107,6 @@ def parse_arguments():
     args = parser.parse_args()
 
     return args
-
-
-def calc_pose_error(pose_quat1, pose_quat2, pos_scale=1, rot_scale=0.1):
-    pose_quat1 = pose_quat1.flatten()
-    pose_quat2 = pose_quat2.flatten()
-    pos_error = np.linalg.norm(pose_quat1[0:3] - pose_quat2[0:3])
-    rot_error = np.arccos(np.abs(pose_quat1[3:] @ pose_quat2[3:]))
-    pose_error = pos_scale * pos_error + rot_scale * rot_error
-    return pose_error
-
 
 def reach_start_pos(viz_3D_publisher, start_pose_net, goal_pose_net, object_poses_net, object_radii):
     global cur_pos_world, cur_ori_quat
@@ -367,17 +357,16 @@ if __name__ == "__main__":
             cur_pose_world = np.concatenate([cur_pos_world, cur_ori_quat])
             cur_pos_net = cur_pos_world * World2Net
             cur_pose_net = np.concatenate([cur_pos_net, cur_ori_quat])
-            pose_error = calc_pose_error(goal_pose_net, cur_pose_world, rot_scale=0)
+            pose_error = calc_pose_error(goal_pose_world, cur_pose_world, rot_scale=0)
             if prev_pose_world is not None:
                 del_pose = calc_pose_error(prev_pose_world, cur_pose_world)
                 del_pose_running_avg.update(del_pose)
 
             if need_update and not DEBUG:
-
                 # DEBUG REMOVE
                 for i in range(5):
                     pose_pub.publish(pose_to_msg(cur_pose_world))
-                rospy.sleep(0.5)
+                rospy.sleep(0.1)
                 is_intervene = False
                 is_intervene_pub.publish(is_intervene)
             
@@ -403,50 +392,19 @@ if __name__ == "__main__":
                           object_idxs)
                 processed_sample = process_single_full_traj(sample)
 
-                # Update policy
-                best_rot_feat, best_offset = None, None
-                best_loss = np.Inf
-                for i in range(20):
-                    print("Trial {}".format(i))
-                    rand_rot_feat = torch.rand(1).to(DEVICE) * \
-                        (rot_feat_max - rot_feat_min) + rot_feat_min
-                    rand_rot_offset = torch.from_numpy(
-                        rand_quat()).to(DEVICE).to(torch.float32)
+                # Update rotation
+                random_seed_adaptation(policy, processed_sample, train_pos=False, train_rot=True, 
+                            is_3D=True, loss_prop_tol=0.4, 
+                            rot_feat_max=rot_feat_max, rot_feat_min=rot_feat_min)
 
-                    rand_rot_feat.requires_grad = True
-                    rand_rot_offset.requires_grad = True
-
-                    policy.update_obj_feats(
-                        copy.deepcopy(obj_pos_feats), [rand_rot_feat], [rand_rot_offset])
-                    losses, _ = perform_adaptation(policy=policy, processed_sample=processed_sample,
-                                                   train_pos=train_pos, train_rot=train_rot,
-                                                   n_adapt_iters=custom_num_rot_net_updates, dstep=dstep,
-                                                   verbose=False, clip_params=True, is_3D=is_3D)
-                    print("loss: %.3f -> %.3f" % (losses[0], losses[-1]))
-                    if losses[-1] < best_loss:
-                        best_loss = losses[-1]
-                        best_pos_feats = policy.obj_pos_feats
-                        best_rot_feats = policy.obj_rot_feats
-                        best_rot_offsets = policy.obj_rot_offsets
-
-                    if losses[-1] < 0.1 * losses[0]: 
-                        break
-
-                print("Min loss: ", best_loss)
-                print("Best rot feats: ", best_rot_feats)
-                print("Best rot offsets: ", best_rot_offsets)
-                policy.update_obj_feats(obj_pos_feats=best_pos_feats,
-                                        obj_rot_feats=best_rot_feats,
-                                        obj_rot_offsets=best_rot_offsets)
-
-                torch.save(
-                    {
-                        "obj_pos_feats": best_pos_feats,
-                        "obj_rot_feats": best_rot_feats,
-                        "obj_rot_offsets": best_rot_offsets
-                    },
-                    "exp2_saved_weights_v2.pth"
-                )
+                # torch.save(
+                #     {
+                #         "obj_pos_feats": best_pos_feats,
+                #         "obj_rot_feats": best_rot_feats,
+                #         "obj_rot_offsets": best_rot_offsets
+                #     },
+                #     "exp2_saved_weights_v2.pth"
+                # )
 
                 # reset the intervention data
                 perturb_pose_traj_world = []

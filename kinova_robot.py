@@ -36,6 +36,44 @@ def twist_transform(theta, w, q):
     g[-1, -1] = 1
     return g
 
+def v_operator(mat):
+    """
+    Undo's the "hat" operation
+    """
+    assert mat.shape == (4, 4)
+    w_hat = mat[:3, :3]
+    v = mat[:3, 3]
+
+    # check that w_hat is a valid symmetric matrix
+    # return np.array([
+    #     [0, -a[2], a[1]],
+    #     [a[2], 0, -a[0]],
+    #     [-a[1], a[0], 0]
+    # ])
+    assert np.allclose(np.diag(w_hat), 0, atol=1e-3)
+    assert np.isclose(w_hat, -w_hat.T, atol=1e-4)
+    return np.concatenate([v, [w_hat[-1, 1], w_hat[0, -1], w_hat[1, 0]] ])
+
+def hat_operator(twist):
+    twist = twist.reshape(6)
+    v = twist[:3]
+    w = twist[3:]
+    res = np.zeros((4, 4))
+    res[:3, :3] = as_symm_matrix(w)
+    res[:3, 3] = v
+    return res
+
+
+def inv_transform(g):
+    R = g[:3, :3]
+    T = g[:3, 3]
+    res = np.zeros((4, 4))
+    res[:3, :3] = R.T
+    res[:3, 3] = -R.T @ T
+    res[-1, -1] = 1
+    return res
+
+
 
 class KinovaRobot(object):
     def __init__(self):
@@ -82,6 +120,10 @@ class KinovaRobot(object):
         self.qs = [self.q1, self.q2, self.q3,
                    self.q4, self.q5, self.q6, self.q7]
 
+        self.w_hats = [as_symm_matrix(self.ws[i]) for i in range(7)]
+        self.vs = [(-self.w_hats[i] @ self.qs[i])[:, np.newaxis] for i in range(7)]
+        self.twists = [np.vstack([v, w]) for v, w in zip(self.vs, self.ws)]
+
     @staticmethod
     def adjoint_transform(g):
         """
@@ -117,31 +159,38 @@ class KinovaRobot(object):
     def calc_jacobian(self, thetas):
         joint_transforms = [twist_transform(
             thetas[i], self.ws[i], self.qs[i]) for i in range(7)]
-        w_hats = [as_symm_matrix(self.ws[i]) for i in range(7)]
-        vs = [-w_hats[i] @ self.qs[i] for i in range(7)]
 
         # 1st joint's g transform is the identity
         # 2nd joint's g transform is the first joint's g transform
         # 3rd joint's g transform is the first joint's g transform * 2nd joint's g transform
         jacobian = np.zeros((6, 7))
 
-        # Spatial Jacobian
-        g = np.eye(4)
-        for i in range(7):
-            psi_vec = np.concatenate([vs[i], self.ws[i].flatten()])
-            psi_vec = self.adjoint_transform(g) @ psi_vec
-            g = g @ joint_transforms[i]
-            jacobian[:, i] = psi_vec.flatten()
+        # for i in range(7):
+        #     lhs = reduce((lambda x, y: x @ y), joint_transforms[0:i], np.eye(4))
+        #     rhs = reduce((lambda x, y: x @ y), joint_transforms[i:], np.eye(4))
+        #     jacobian[:, i] = v_operator(lhs @ hat_operator(self.twists[i]) @ rhs @ self.g0)
 
-        print(g @ self.g0)
+        # Spatial Jacobian
+
+        # gst = reduce((lambda x, y: x @ y), joint_transforms) @ self.g0
+        # g = np.eye(4)
+        # for i in range(7):
+        #     twist = self.twists[i]
+        #     import ipdb
+        #     ipdb.set_trace()
+        #     twist = self.adjoint_transform(g) @ twist @ gst
+        #     g = g @ joint_transforms[i]
+        #     jacobian[:, i] = twist.flatten()
+
+        # print(g @ self.g0)
 
         # Body Jacobian
-        # g = self.g0
-        # for i in range(6, -1, -1):
-        #     psi_vec = np.concatenate([vs[i], self.ws[i].flatten()])
-        #     g = joint_transforms[i] @ g
-        #     psi_vec = self.adjoint_transform(g) @ psi_vec
-        #     jacobian[:, i] = psi_vec.flatten()
+        g = self.g0
+        for i in range(6, -1, -1):
+            twist = self.twists[i]
+            g = joint_transforms[i] @ g
+            twist = self.adjoint_transform(g) @ twist
+            jacobian[:, i] = twist.flatten()
 
         return jacobian
 
@@ -262,13 +311,22 @@ def test():
             i, q[i], np.array2string(ee_pos, precision=3), np.array2string(ee_rot_quat, precision=3)))
         q[i] = 0
 
-    q = np.array([np.pi/6, 3*np.pi/2, np.pi/3, 4*np.pi/3, 3*np.pi/5, np.pi, 0.0])
+    q = np.array([0, np.pi/4, np.pi, -np.pi/4, 0, 3*np.pi/2, np.pi/2])
     ee_pose_mat = robot.fk(q)
-    print(ee_pose_mat)
-    jacobian = robot.calc_jacobian(q)
-    print(np.array2string(jacobian, precision=2))
-    import ipdb
-    ipdb.set_trace()
+    ee_ori_euler_xyz = R.from_matrix(ee_pose_mat[:3, :3]).as_euler("xyz")
+    print(ee_pose_mat[:3, 3])
+    print(np.rad2deg(ee_ori_euler_xyz))
+
+    # q = np.array([np.pi/6, 3*np.pi/2, np.pi/3, 4*np.pi/3, 3*np.pi/5, np.pi, 0.0])
+    # ee_pose_mat = robot.fk(q)
+    # print(ee_pose_mat)
+    # jacobian = robot.calc_jacobian(q)
+    # print(np.array2string(jacobian, precision=2))
+    # import ipdb
+    # ipdb.set_trace()
+    # force_spatial = np.array([0, 0, 0.5*9.8])
+    # force_body = inv_transform(ee_pose_mat) @ np.concatenate([force_spatial, [1]])
+    # torques = jacobian @ np.concatenate([force_body, [0, 0, 0]])
 
 if __name__ == '__main__':
     test()

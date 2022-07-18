@@ -12,6 +12,13 @@ from scipy.spatial.transform import Slerp
 from pybullet_tools.kuka_primitives import BodyConf, BodyPath, Command
 from pybullet_tools.utils import *
 
+from data_params import Params
+from elastic_band import Object
+
+import rospy
+from geometry_msgs.msg import PoseStamped
+from std_msgs.msg import Bool
+
 
 class RunningAverage(object):
     def __init__(self, length, init_vals) -> None:
@@ -28,6 +35,39 @@ class RunningAverage(object):
 def sigint_handler(signal, frame):
     # Force scripts to exit cleanly
     exit()
+
+
+def pose_to_msg(pose: np.ndarray) -> PoseStamped:
+    """
+    Convert a pose to a geometry_msgs.msg.PoseStamped() message
+
+    :param pose: Pose (pos_dim + rot_dim)
+    :return: geometry_msgs.msg.PoseStamped() message
+    """
+    msg = PoseStamped()
+    msg.header.frame_id = "map"
+    msg.pose.position.x = pose[0]
+    msg.pose.position.y = pose[1]
+    msg.pose.position.z = pose[2]
+
+    msg.pose.orientation.x = pose[3]
+    msg.pose.orientation.y = pose[4]
+    msg.pose.orientation.z = pose[5]
+    msg.pose.orientation.w = pose[6]
+
+    return msg
+
+def msg_to_pose(msg):
+    pose = np.array([
+        msg.pose.position.x,
+        msg.pose.position.y,
+        msg.pose.position.z,
+        msg.pose.orientation.x,
+        msg.pose.orientation.y,
+        msg.pose.orientation.z,
+        msg.pose.orientation.w,
+    ])
+    return pose
 
 
 def interpolate_rotations(start_quat, stop_quat, alpha):
@@ -100,3 +140,11 @@ def load_floor():
                 floor_ids.append(floor)
 
     return floor_ids
+
+def calc_pose_error(pose_quat1, pose_quat2, pos_scale=1, rot_scale=0.1):
+    pose_quat1 = pose_quat1.flatten()
+    pose_quat2 = pose_quat2.flatten()
+    pos_error = np.linalg.norm(pose_quat1[0:3] - pose_quat2[0:3])
+    rot_error = np.arccos(np.abs(pose_quat1[3:] @ pose_quat2[3:]))
+    pose_error = pos_scale * pos_error + rot_scale * rot_error
+    return pose_error

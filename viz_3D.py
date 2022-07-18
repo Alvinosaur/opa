@@ -22,6 +22,7 @@ from model import Policy, PolicyNetwork, pose_to_model_input, decode_ori
 from train import DEVICE
 from data_params import Params
 from exp_params import *
+from exp_utils import pose_to_msg, msg_to_pose
 
 seed = 444
 np.random.seed(seed)
@@ -32,38 +33,6 @@ FORCE_VEC_SCALE = 3
 POS_DIM = 3
 ROT_DIM = 6
 
-
-def pose_to_msg(pose: np.ndarray) -> PoseStamped:
-    """
-    Convert a pose to a geometry_msgs.msg.PoseStamped() message
-
-    :param pose: Pose (pos_dim + rot_dim)
-    :return: geometry_msgs.msg.PoseStamped() message
-    """
-    msg = PoseStamped()
-    msg.header.frame_id = "map"
-    msg.pose.position.x = pose[0]
-    msg.pose.position.y = pose[1]
-    msg.pose.position.z = pose[2]
-
-    msg.pose.orientation.x = pose[3]
-    msg.pose.orientation.y = pose[4]
-    msg.pose.orientation.z = pose[5]
-    msg.pose.orientation.w = pose[6]
-
-    return msg
-
-def msg_to_pose(msg):
-    pose = np.array([
-        msg.pose.position.x,
-        msg.pose.position.y,
-        msg.pose.position.z,
-        msg.pose.orientation.x,
-        msg.pose.orientation.y,
-        msg.pose.orientation.z,
-        msg.pose.orientation.w,
-    ])
-    return pose
 
 def publish_object_forces(pub: rospy.Publisher, cur_pos: np.ndarray,
                           object_forces: np.ndarray, color_rgbs: List[Tuple[float, float, float]]):

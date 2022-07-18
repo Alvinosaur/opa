@@ -13,12 +13,14 @@ import argparse
 from tqdm import tqdm
 from typing import *
 import json
+import copy
 
 import torch
 
 from dataset import Dataset
 from data_params import Params
 from model import Policy, PolicyNetwork, encode_ori_3D, encode_ori_2D, pose_to_model_input
+from data_generation import rand_quat
 
 seed = 444
 np.random.seed(seed)
@@ -723,7 +725,7 @@ def adaptation_loss(model: PolicyNetwork, processed_sample: Tuple,
 
 def perform_adaptation(policy: Policy, processed_sample: Tuple,
                        train_pos: bool, train_rot: bool, is_3D: bool,
-                       n_adapt_iters: int, dstep: float,
+                       n_adapt_iters: int, 
                        verbose=False, clip_params=True):
     """
     Adapts the policy to the batch of human intervention data.
@@ -732,7 +734,6 @@ def perform_adaptation(policy: Policy, processed_sample: Tuple,
     :param train_pos: Whether to train the policy on position
     :param train_rot: Whether to train the policy on rotation
     :param n_adapt_iters: Number of iterations to perform adaptation
-    :param dstep: Step size for gradient descent
     :param verbose: Whether to print out adaptation progress
     :param clip_params: Whether to clip the policy parameters
     :return:
@@ -788,6 +789,53 @@ def perform_adaptation(policy: Policy, processed_sample: Tuple,
 
     return losses, pred_traj
 
+
+def random_seed_adaptation(policy: Policy, processed_sample, train_pos, train_rot, is_3D, 
+                           loss_prop_tol=0.4, 
+                           pos_feat_max=None, pos_feat_min=None, 
+                           rot_feat_max=None, rot_feat_min=None, 
+                           n_adapt_iters=30, max_trials=10):
+    best_rot_feats, best_rot_offsets = None, None
+    best_pos_feats = None
+
+    pos_feats = policy.obj_pos_feats
+    rot_feats = policy.obj_rot_feats
+    rot_offsets = policy.obj_rot_offsets
+    device = pos_feats[0].device
+    best_loss = np.Inf
+    for i in range(max_trials):
+        print("Trial {}".format(i))
+        if train_pos:
+            rand_pos_feat = torch.rand(1).to(device) * \
+                (pos_feat_max - pos_feat_min) + pos_feat_min
+            rand_pos_feat.requires_grad = True
+            pos_feats = copy.deepcopy([rand_pos_feat])
+        if train_rot:
+            rand_rot_feat = torch.rand(1).to(device) * \
+                (rot_feat_max - rot_feat_min) + rot_feat_min
+            rand_rot_offset = torch.from_numpy(
+                rand_quat()).to(device).to(torch.float32)
+            rand_rot_feat.requires_grad = True
+            rand_rot_offset.requires_grad = True
+            rot_feats = copy.deepcopy([rand_rot_feat])
+            rot_offsets = copy.deepcopy([rand_rot_offset])
+
+        policy.update_obj_feats(pos_feats, rot_feats, rot_offsets)
+        losses, _ = perform_adaptation(policy=policy, processed_sample=processed_sample,
+                                        train_pos=train_pos, train_rot=train_rot,
+                                        n_adapt_iters=n_adapt_iters, 
+                                        verbose=False, clip_params=True, is_3D=is_3D)
+        print("loss: %.3f -> %.3f" % (losses[0], losses[-1]))
+        if losses[-1] < best_loss:
+            best_loss = losses[-1]
+            best_pos_feats = pos_feats
+            best_rot_feats = rot_feats
+            best_rot_offsets = rot_offsets
+
+        if losses[-1] < loss_prop_tol * losses[0]: 
+            break
+
+    return best_pos_feats, best_rot_feats, best_rot_offsets
 
 def parse_arguments():
     parser = argparse.ArgumentParser()
