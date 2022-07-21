@@ -1,0 +1,13 @@
+{
+    "model_name": "policy_3D_v2",
+    "data_name": "rot_3D",
+    "loaded_epoch": 0,
+    "is_rot": true,
+    "is_3D": true,
+    "lr": 0.001,
+    "batch_size": 16,
+    "n_samples": 32,
+    "hidden_dim": 64,
+    "pos_preference_dim": 1,
+    "rot_preference_dim": 1
+}

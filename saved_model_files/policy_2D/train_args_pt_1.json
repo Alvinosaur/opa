@@ -1,0 +1,13 @@
+{
+    "model_name": "policy_2D",
+    "data_name": "rot_2D",
+    "loaded_epoch": 0,
+    "train_rot": true,
+    "is_3D": false,
+    "lr": 0.001,
+    "batch_size": 16,
+    "n_samples": 32,
+    "hidden_dim": 64,
+    "pos_preference_dim": 1,
+    "rot_preference_dim": 1
+}
