@@ -53,7 +53,7 @@ perturb_pose_traj_world = []
 is_intervene = False
 need_update = False
 
-DEBUG = False
+DEBUG = True
 if DEBUG:
     dstep = 0.02
     ros_delay = 0.05
@@ -260,7 +260,7 @@ if __name__ == "__main__":
 
     # Optionally view with ROS Rviz
     if args.view_ros:
-        viz_3D_publisher = Viz3DROSPublisher(num_objects=num_objects)
+        viz_3D_publisher = Viz3DROSPublisher(num_objects=num_objects, frame=ROBOT_FRAME)
         # TODO:
         object_colors = [
             (0, 255, 0),

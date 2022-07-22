@@ -29,13 +29,14 @@ np.random.seed(seed)
 torch.manual_seed(seed)
 random.seed(seed)
 np.set_printoptions(suppress=True)  # disable scientific notation
-FORCE_VEC_SCALE = 3
+FORCE_VEC_SCALE = 1
 POS_DIM = 3
 ROT_DIM = 6
 
 
 def publish_object_forces(pub: rospy.Publisher, cur_pos: np.ndarray,
-                          object_forces: np.ndarray, color_rgbs: List[Tuple[float, float, float]]):
+                          object_forces: np.ndarray, color_rgbs: List[Tuple[float, float, float]],
+                          frame):
     """
     Publish function to view position "forces" from each object/node
     on the agent.
@@ -54,7 +55,7 @@ def publish_object_forces(pub: rospy.Publisher, cur_pos: np.ndarray,
 
     for i, vec in enumerate(object_forces):
         marker = Marker()
-        marker.header.frame_id = "map"
+        marker.header.frame_id = frame
         marker.id = i
         marker.type = marker.ARROW
         marker.action = 0
@@ -62,9 +63,9 @@ def publish_object_forces(pub: rospy.Publisher, cur_pos: np.ndarray,
         marker.color.g = color_rgbs[i][1]
         marker.color.b = color_rgbs[i][2]
         marker.color.a = 1.0
-        marker.scale.x = 0.1
-        marker.scale.y = 0.1
-        marker.scale.z = 0.1
+        marker.scale.x = 0.01
+        marker.scale.y = 0.01
+        marker.scale.z = 0.01
         # Need two points to draw arrow: source and destination
         marker.points.append(Point(*cur_pos))
         marker.points.append(Point(*(cur_pos + FORCE_VEC_SCALE * obj_weights[i] * vec)))
@@ -74,7 +75,7 @@ def publish_object_forces(pub: rospy.Publisher, cur_pos: np.ndarray,
 
 
 def publish_objects(object_pub: rospy.Publisher, pose_pubs: List[rospy.Publisher],
-                    objects: List[Object], obj_colors_rgb):
+                    objects: List[Object], obj_colors_rgb, frame):
     """
     Publish function to view objects/nodes as spheres.
 
@@ -87,7 +88,7 @@ def publish_objects(object_pub: rospy.Publisher, pose_pubs: List[rospy.Publisher
     marker_array_msg = MarkerArray()
     for i, (obj, color_rgb, pose_pub) in enumerate(zip(objects, obj_colors_rgb, pose_pubs)):
         marker = Marker()
-        marker.header.frame_id = "map"
+        marker.header.frame_id = frame
         marker.id = i
         marker.type = marker.SPHERE
         marker.action = 0
@@ -106,13 +107,13 @@ def publish_objects(object_pub: rospy.Publisher, pose_pubs: List[rospy.Publisher
         marker_array_msg.markers.append(marker)
 
         # Visualize 3D pose axes
-        pose = pose_to_msg(np.concatenate([obj.pos, obj.ori]))
+        pose = pose_to_msg(np.concatenate([obj.pos, obj.ori]), frame)
         pose_pub.publish(pose)
 
     object_pub.publish(marker_array_msg)
 
 
-def path_from_traj(traj: np.ndarray) -> Path:
+def path_from_traj(traj: np.ndarray, frame) -> Path:
     """
     Convert a trajectory to a nav_msgs.msg.Path() message
 
@@ -120,16 +121,16 @@ def path_from_traj(traj: np.ndarray) -> Path:
     :return: nav_msgs.msg.Path() message
     """
     path = Path()
-    path.header.frame_id = "map"
+    path.header.frame_id = frame
     assert traj.shape[1] == 7  # pos[3], ori[4]
     for i in range(traj.shape[0]):
-        pose = pose_to_msg(traj[i])
+        pose = pose_to_msg(traj[i], frame)
         path.poses.append(pose)
 
     return path
 
 
-def make_boundary_message(lb: np.ndarray, ub: np.ndarray) -> MarkerArray:
+def make_boundary_message(lb: np.ndarray, ub: np.ndarray, frame) -> MarkerArray:
     """
     Make a series of Line marker messages to draw bounds of data
 
@@ -141,7 +142,7 @@ def make_boundary_message(lb: np.ndarray, ub: np.ndarray) -> MarkerArray:
     # draw all edges of cube
     def make_boundary_marker(p0, p1, idx):
         marker = Marker()
-        marker.header.frame_id = "map"
+        marker.header.frame_id = frame
         marker.id = idx
         marker.type = marker.LINE_LIST
         # marker.action = marker.ADD
@@ -197,9 +198,10 @@ class Viz3DROSPublisher(object):
     Helper to visualize any live 3D scene in Rviz.
     """
 
-    def __init__(self, num_objects, bounds=None):
+    def __init__(self, num_objects, bounds=None, frame="map"):
+        self.frame = frame
         # Optionally draw a bounding cube around scene
-        self.bounds_msg = make_boundary_message(bounds[0], bounds[1]) if bounds is not None else None
+        self.bounds_msg = make_boundary_message(bounds[0], bounds[1], frame) if bounds is not None else None
 
         # Start ROS node
         try:
@@ -230,16 +232,16 @@ class Viz3DROSPublisher(object):
         """
 
         publish_objects(object_pub=self.object_pub, pose_pubs=self.pose_pubs,
-                        obj_colors_rgb=object_colors, objects=objects)
+                        obj_colors_rgb=object_colors, objects=objects, frame=self.frame)
 
         if agent_traj is not None:
-            self.agent_path_pub.publish(path_from_traj(agent_traj))
+            self.agent_path_pub.publish(path_from_traj(agent_traj, self.frame))
 
         if expert_traj is not None:
             # NOTE: expert_traj should dynamically change to be similar
             #   length as agent traj
-            self.expert_path_pub.publish(path_from_traj(expert_traj))
-            self.expert_pose_pub.publish(pose_to_msg(expert_traj[0]))
+            self.expert_path_pub.publish(path_from_traj(expert_traj, self.frame))
+            self.expert_pose_pub.publish(pose_to_msg(expert_traj[0], self.frame))
 
         if self.bounds_msg is not None:
             self.bounds_pub.publish(self.bounds_msg)
@@ -247,7 +249,7 @@ class Viz3DROSPublisher(object):
         if object_forces is not None:
             publish_object_forces(self.object_forces_pub, cur_pos=agent_traj[0, 0:POS_DIM],
                                   object_forces=object_forces,
-                                  color_rgbs=force_colors_rgb)
+                                  color_rgbs=force_colors_rgb, frame=self.frame)
 
         try:
             self.ros_rate.sleep()

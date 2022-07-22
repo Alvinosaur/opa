@@ -5,9 +5,12 @@ For a copy, see <https://opensource.org/licenses/MIT>.
 """
 import numpy as np
 import ipdb
+import re
 
 from scipy.spatial.transform import Rotation as R
 from scipy.spatial.transform import Slerp
+
+import transforms3d.affines as aff
 
 from pybullet_tools.kuka_primitives import BodyConf, BodyPath, Command
 from pybullet_tools.utils import *
@@ -18,6 +21,8 @@ from elastic_band import Object
 import rospy
 from geometry_msgs.msg import PoseStamped
 from std_msgs.msg import Bool
+
+ROBOT_FRAME = "kinova_base"
 
 
 class RunningAverage(object):
@@ -36,8 +41,42 @@ def sigint_handler(signal, frame):
     # Force scripts to exit cleanly
     exit()
 
+# Taken from meta cobot 
+def ParseCameraExtrinsics(in_path, serial, name):
+    '''
+    translation xyz: -0.218569 0.208541 0.794479
+    quaternion wxyz: 0.502517 0.50733 0.49782 -0.492207
+    '''
+    infile = os.path.join(in_path, serial, "extrinsics.txt")
+    with open(infile, 'r') as f_extrinsic:
+        trans_line = f_extrinsic.readline()
+        words = trans_line.split(' ')
+        tx = float(words[2])
+        ty = float(words[3])
+        tz = float(words[4])
 
-def pose_to_msg(pose: np.ndarray) -> PoseStamped:
+        q_line = f_extrinsic.readline()
+        words = q_line.split(' ')
+        w = float(words[2])
+        rx = float(words[3])
+        ry = float(words[4])
+        rz = float(words[5])
+
+    print("Reading extrinsics for camera {} at {}".format(
+        name, infile
+    ))
+
+    mat = ComposeAffine([tx, ty, tz], [rx, ry, rz, w])
+
+    return mat
+
+# Taken from meta cobot 
+def ComposeAffine(trans, quat, Z=np.ones(3)):
+    rot_mat = R.from_quat(quat).as_matrix()
+    M = aff.compose(trans, rot_mat, Z)
+    return M
+
+def pose_to_msg(pose: np.ndarray, frame) -> PoseStamped:
     """
     Convert a pose to a geometry_msgs.msg.PoseStamped() message
 
@@ -45,7 +84,7 @@ def pose_to_msg(pose: np.ndarray) -> PoseStamped:
     :return: geometry_msgs.msg.PoseStamped() message
     """
     msg = PoseStamped()
-    msg.header.frame_id = "map"
+    msg.header.frame_id = frame
     msg.pose.position.x = pose[0]
     msg.pose.position.y = pose[1]
     msg.pose.position.z = pose[2]
@@ -148,3 +187,9 @@ def calc_pose_error(pose_quat1, pose_quat2, pos_scale=1, rot_scale=0.1):
     rot_error = np.arccos(np.abs(pose_quat1[3:] @ pose_quat2[3:]))
     pose_error = pos_scale * pos_error + rot_scale * rot_error
     return pose_error
+
+def command_kinova_gripper(pub, cmd_open):
+    msg = Bool(cmd_open)
+    for i in range(3):
+        pub.publish(msg)
+        rospy.sleep(0.1)

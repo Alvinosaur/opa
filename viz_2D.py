@@ -17,7 +17,7 @@ import matplotlib.colors as mcolors
 
 import torch
 
-from train import model_rollout, model_rollout_wrapper, perform_adaptation, DEVICE, process_single_full_traj
+from train import model_rollout_wrapper, perform_adaptation, DEVICE, process_single_full_traj
 from elastic_band import Object
 from data_params import Params
 from model import Policy, PolicyNetwork, pose_to_model_input, decode_ori

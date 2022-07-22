@@ -15,6 +15,8 @@ import rospy
 from geometry_msgs.msg import PoseStamped
 from std_msgs.msg import Bool
 
+import transforms3d.affines as aff
+
 from scipy.spatial.transform import Rotation as R
 from scipy.spatial.transform import Slerp
 
@@ -32,14 +34,14 @@ from exp1_cup_low_table_sim import robot_table_surface_projections
 World2Net = 10.0
 Net2World = 1 / World2Net
 
-ee_min_pos_world = np.array([0.23, -0.375, -0.1])
+ee_min_pos_world = np.array([0.23, -0.375, -0.0])
 ee_max_pos_world = np.array([0.725, 0.55, 0.35])
 # table_bounds: [(minx, maxx, miny, maxy), ]
 table_bounds_world = [(ee_min_pos_world[0], ee_max_pos_world[0],
                        ee_min_pos_world[1], ee_max_pos_world[1])]
 table_height_world = -0.1
-num_objects = 1
-object_radii = np.array([4.0] * num_objects)  # defined on net scale
+num_objects = 3
+object_radii = np.array([4.0, 1.0, 1.0])[:, np.newaxis]  # defined on net scale
 goal_rot_radius = np.array([1.5])
 goal_pos_world = np.array([0.4, -0.271, 0.18])
 goal_ori_quat = np.array([-0.6979, -0.7149, 0.0265, 0.0311])
@@ -52,11 +54,22 @@ custom_num_rot_net_updates = 30
 
 # Global info updated by callbacks
 cur_pos_world, cur_ori_quat = None, None
+obstacles_pos_world = [[0.6, 0.2, 0.0], [0.3, -0.15, 0.0]]
+obstacles_ori_quat = [[0,0,0,1], [0,0,0,1]]
 perturb_pose_traj_world = []
+perturb_obj_pose_traj_world = [[], []]
 is_intervene = False
 need_update = False
 
-DEBUG = False
+# camera to world pose
+cam_calib_path = "/home/ruic/Documents/meta_cobot_wksp/src/meta_cobot_learning/hri_tasks/calibration"
+map2rs0_mat = ParseCameraExtrinsics(cam_calib_path, "845112071853", "rs0")
+
+# treating robot base ("kinova_base") as the "world" frame
+robotbase2map = ComposeAffine(trans=np.array([-0.03, 0.54, 0.0]), quat=np.array([0,0,0,1]))
+# import ipdb
+# ipdb.set_trace()
+DEBUG = True
 if DEBUG:
     dstep = 0.02
     ros_delay = 0.05
@@ -83,6 +96,16 @@ def robot_pose_cb(msg):
             perturb_pose_traj_world.append(
                 np.concatenate([cur_pos_world, cur_ori_quat]))
 
+def obj_pose_cb(msg, obj_idx):
+    global obstacles_pos_world, obstacles_ori_quat
+    pose = msg_to_pose(msg)
+
+    # obj_posemat_cam = ComposeAffine(trans=pose[0:3], quat=pose[3:])
+    # obj_posemat_world = robotbase2map @ map2rs0_mat @ obj_posemat_cam
+    # trans, rot_mat, _, _ = aff.decompose44(obj_posemat_world)
+
+    # obstacles_pos_world[obj_idx] = trans
+    # obstacles_ori_quat[obj_idx] = R.from_matrix(rot_mat).as_quat()
 
 def parse_arguments():
     parser = argparse.ArgumentParser()
@@ -121,12 +144,16 @@ def reach_start_pos(viz_3D_publisher, start_pose_net, goal_pose_net, object_pose
             dist_to_start_ratio = min(pos_mag / (start_dist  + 1e-5), 1.0)
             target_ori_quat = interpolate_rotations(start_quat=cur_ori_quat, stop_quat=start_ori_quat, 
                                                     alpha=1-dist_to_start_ratio)
-            pose_pub.publish(pose_to_msg(np.concatenate([target_pos_world, target_ori_quat])))
+            pose_pub.publish(
+                pose_to_msg(np.concatenate([target_pos_world, target_ori_quat]), ROBOT_FRAME)
+            )
             is_intervene_pub.publish(False)
 
             # Publish objects
             object_colors = [
                 (0, 255, 0),
+                (255, 0, 0),
+                (255, 0, 0),
             ]
             all_object_colors = object_colors + [
                 Params.start_color_rgb,
@@ -134,16 +161,16 @@ def reach_start_pos(viz_3D_publisher, start_pose_net, goal_pose_net, object_pose
                 Params.agent_color_rgb,
             ]
             # force_colors = object_colors + [Params.goal_color_rgb]
-            all_objects = [Object(pos=pose[0:POS_DIM], ori=[0.7627784,  -0.00479786 , 0.6414479,   0.08179578],
+            all_objects = [Object(pos=Net2World * pose[0:POS_DIM], ori=pose[POS_DIM:],
                                       radius=radius) for pose, radius in
-                               zip(object_poses_net, object_radii)]
+                               zip(object_poses_net, Net2World * object_radii)]
             all_objects += [
                 Object(
-                    pos=start_pose_net[0:POS_DIM], radius=Params.agent_radius, ori=start_pose_net[POS_DIM:]),
+                    pos=Net2World * start_pose_net[0:POS_DIM], radius=Net2World * Params.agent_radius, ori=start_pose_net[POS_DIM:]),
                 Object(
-                    pos=goal_pose_net[0:POS_DIM], radius=goal_rot_radius.item(), ori=goal_pose_net[POS_DIM:]),
+                    pos=Net2World * goal_pose_net[0:POS_DIM], radius=Net2World * goal_rot_radius.item(), ori=goal_pose_net[POS_DIM:]),
                 Object(
-                    pos=cur_pos_world * World2Net, radius=Params.agent_radius, ori=cur_ori_quat)
+                    pos=cur_pos_world, radius=Net2World * Params.agent_radius, ori=cur_ori_quat)
             ]
             viz_3D_publisher.publish(objects=all_objects, object_colors=all_object_colors,)
 
@@ -171,6 +198,16 @@ if __name__ == "__main__":
     # Robot EE pose
     rospy.Subscriber('/kinova/pose_tool_in_base_fk',
                      PoseStamped, robot_pose_cb, queue_size=1)
+    
+    # TF transform
+    # rospy.Subscriber('/tf',
+    #                  PoseStamped, tf_cb, queue_size=10)
+
+    # Obstacle poses
+    rospy.Subscriber('/object_poses/object_pose_0',
+                     PoseStamped, lambda msg: obj_pose_cb(msg, 0), queue_size=1)
+    rospy.Subscriber('/object_poses/object_pose_3',
+                     PoseStamped, lambda msg: obj_pose_cb(msg, 1), queue_size=1)
 
     # Target pose topic
     pose_pub = rospy.Publisher(
@@ -214,7 +251,7 @@ if __name__ == "__main__":
     train_rot, train_pos = False, True
     # NOTE: not training "object_types", purely object identifiers
     object_idxs = np.arange(num_objects)
-    pos_obj_types = [None] * num_objects
+    pos_obj_types = [Params.ATTRACT_IDX, None, None]
     pos_requires_grad = [train_pos] * num_objects
     rot_obj_types = [None] * num_objects
     rot_requires_grad = [train_rot] * num_objects
@@ -244,10 +281,12 @@ if __name__ == "__main__":
 
     # Optionally view with ROS Rviz
     if args.view_ros:
-        viz_3D_publisher = Viz3DROSPublisher(num_objects=num_objects)
+        viz_3D_publisher = Viz3DROSPublisher(num_objects=num_objects, frame=ROBOT_FRAME)
         # TODO:
         object_colors = [
             (0, 255, 0),
+            (255, 0, 0),
+            (255, 0, 0),
         ]
         all_object_colors = object_colors + [
             Params.start_color_rgb,
@@ -264,6 +303,7 @@ if __name__ == "__main__":
 
     it = 0
     pose_error_tol = 0.1
+    del_pose_tol = 0.005
     perturb_pose_traj_world = []
     override_pred_delay = False
     for exp_iter in range(3):
@@ -282,13 +322,11 @@ if __name__ == "__main__":
         while not rospy.is_shutdown() and pose_error > pose_error_tol and del_pose_running_avg.avg > del_pose_tol:
             # TODO: REMOVE! TEMPORARY
             # # Get current object poses and convert to net input
-            # object_pos_net = World2Net * object_pos_world
-            # object_poses_net = np.concatenate(
-            #     [object_pos_net, object_oris], axis=-1)
-            # object_poses_tensor = torch.from_numpy(pose_to_model_input(
-            #     object_poses_net)).to(torch.float32).to(DEVICE)
-            # objects_torch = torch.cat(
-            #     [object_poses_tensor, object_radii_torch], dim=-1).unsqueeze(0)
+            obstacles_pos_net = World2Net * np.vstack(obstacles_pos_world)
+            obstacles_pose_net = np.concatenate(
+                [obstacles_pos_net, obstacles_ori_quat], axis=-1)
+            obstacles_poses_tensor = torch.from_numpy(pose_to_model_input(
+                obstacles_pose_net)).to(torch.float32).to(DEVICE)
 
             cur_pose_world = np.concatenate([cur_pos_world, cur_ori_quat])
             cur_pos_net = cur_pos_world * World2Net
@@ -301,7 +339,7 @@ if __name__ == "__main__":
             if need_update and not DEBUG:
                 # DEBUG REMOVE
                 for i in range(5):
-                    pose_pub.publish(pose_to_msg(cur_pose_world))
+                    pose_pub.publish(pose_to_msg(cur_pose_world, ROBOT_FRAME))
                 rospy.sleep(0.1)
                 is_intervene = False
                 is_intervene_pub.publish(is_intervene)
@@ -323,12 +361,15 @@ if __name__ == "__main__":
 
                 # Given desired EE positions from human perturb, need to calculate corresponding
                 # projected object poses for flat tables
-                table_poses_projected_net = robot_table_surface_projections(
+                table_pose_projected_net = robot_table_surface_projections(
                     table_bounds_sim=table_bounds_world, EE_pos_sim=perturb_pos_traj_world_interp,
                     table_height_sim=table_height_world, scale_to_net=World2Net)
+                all_objects_pose_net = np.concatenate([table_pose_projected_net, 
+                                                obstacles_pose_net[np.newaxis].repeat(T, axis=0)], 
+                                                axis=1)
 
                 sample = (perturb_pose_traj_net, start_pose_net, goal_pose_net, goal_rot_radius,
-                        table_poses_projected_net,
+                        all_objects_pose_net,
                         object_radii[np.newaxis].repeat(T, axis=0),
                         object_idxs)
                 processed_sample = process_single_full_traj(sample)
@@ -336,7 +377,8 @@ if __name__ == "__main__":
                 # Update position
                 random_seed_adaptation(policy, processed_sample, train_pos=True, train_rot=False, 
                             is_3D=True, loss_prop_tol=0.4, 
-                            pos_feat_max=pos_feat_max, pos_feat_min=pos_feat_min)
+                            pos_feat_max=pos_feat_max, pos_feat_min=pos_feat_min,
+                            clip_params=False)
 
                 # reset the intervention data
                 perturb_pose_traj_world = []
@@ -346,14 +388,17 @@ if __name__ == "__main__":
 
             elif it % 2 == 0 or override_pred_delay:
                 # Compute robot EE -> table projections
-                table_poses_projected_net = robot_table_surface_projections(
+                table_pose_projected_net = robot_table_surface_projections(
                     table_bounds_sim=table_bounds_world, EE_pos_sim=cur_pos_world,
                     table_height_sim=table_height_world, scale_to_net=World2Net)[0]  # remove time dimension
-                table_poses_projected_tensor = torch.from_numpy(
-                    pose_to_model_input(table_poses_projected_net)).to(torch.float32).to(
+                table_pose_projected_tensor = torch.from_numpy(
+                    pose_to_model_input(table_pose_projected_net)).to(torch.float32).to(
                     DEVICE)
+                
+                objects_tensor = torch.cat(
+                    [table_pose_projected_tensor, obstacles_poses_tensor], dim=0)
                 objects_torch = torch.cat(
-                    [table_poses_projected_tensor, object_radii_torch], dim=-1).unsqueeze(0)
+                    [objects_tensor, object_radii_torch], dim=-1).unsqueeze(0)
 
                 with torch.no_grad():
                     # Define "object" inputs into policy
@@ -397,19 +442,26 @@ if __name__ == "__main__":
 
             # Optionally view with ROS
             if args.view_ros:
-                all_objects = [Object(pos=pose[0:POS_DIM], ori=pose[POS_DIM:],
-                                      radius=radius) for pose, radius in
-                               zip(table_poses_projected_net, object_radii)]
-                all_objects += [
+                all_objects = [
+                    # Table
                     Object(
-                        pos=start_pose_net[0:POS_DIM], radius=Params.agent_radius, ori=start_pose_net[POS_DIM:]),
+                        pos=Net2World * table_pose_projected_net[0, 0:POS_DIM], radius=Net2World * object_radii[0], ori=table_pose_projected_net[0, POS_DIM:]),
+
+                    # Obstacles
                     Object(
-                        pos=goal_pose_net[0:POS_DIM], radius=Params.agent_radius, ori=goal_pose_net[POS_DIM:]),
+                        pos=Net2World * obstacles_pose_net[0, 0:POS_DIM], radius=Net2World * object_radii[1], ori=obstacles_pose_net[0, POS_DIM:]),
                     Object(
-                        pos=cur_pose_net[0:POS_DIM], radius=Params.agent_radius, ori=cur_pose_net[POS_DIM:])
+                        pos=Net2World * obstacles_pose_net[1, 0:POS_DIM], radius=Net2World * object_radii[2], ori=obstacles_pose_net[1, POS_DIM:]),
+
+                    Object(
+                        pos=Net2World * start_pose_net[0:POS_DIM], radius=Net2World * Params.agent_radius, ori=start_pose_net[POS_DIM:]),
+                    Object(
+                        pos=Net2World * goal_pose_net[0:POS_DIM], radius=Net2World * Params.agent_radius, ori=goal_pose_net[POS_DIM:]),
+                    Object(
+                        pos=Net2World * cur_pose_net[0:POS_DIM], radius=Net2World * Params.agent_radius, ori=cur_pose_net[POS_DIM:])
                 ]
                 agent_traj = np.vstack(
-                    [cur_pose_net, np.concatenate([Net2World * local_target_pos_world, cur_ori_quat])])
+                    [Net2World * cur_pose_net, np.concatenate([Net2World * local_target_pos_world, cur_ori_quat])])
                 if isinstance(object_forces, torch.Tensor):
                     object_forces = object_forces[0].detach().cpu().numpy()
                 viz_3D_publisher.publish(objects=all_objects, agent_traj=agent_traj,
@@ -425,15 +477,15 @@ if __name__ == "__main__":
             is_intervene_pub.publish(Bool(is_intervene))
             # Publish target pose
             if not DEBUG:
-                target_pose = np.concatenate(
-                    [local_target_pos_world, interp_rot.as_quat()])
-                pose_pub.publish(pose_to_msg(target_pose))
+                target_pose_world = np.concatenate(
+                    [local_target_pos_world, interp_rot])
+                pose_pub.publish(pose_to_msg(target_pose_world, ROBOT_FRAME))
                 # # Publish is_intervene
                 # is_intervene_pub.publish(Bool(is_intervene))
 
             if DEBUG:
                 cur_pos_world = local_target_pos_world
-                cur_ori_quat = interp_rot.as_quat()
+                cur_ori_quat = interp_rot
 
             rospy.sleep(0.1)
 

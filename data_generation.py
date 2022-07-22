@@ -24,6 +24,7 @@ from sklearn.exceptions import ConvergenceWarning
 from data_params import Params
 from elastic_band import ElasticBand, Object
 import viz_2D
+from utils import rand_quat
 
 seed = 444
 np.random.seed(seed)
@@ -44,18 +45,6 @@ def as_symm_matrix(a: np.ndarray) -> np.ndarray:
         [a[2], 0, -a[0]],
         [-a[1], a[0], 0]
     ])
-
-
-def rand_quat() -> np.ndarray:
-    """
-    Generate a random quaternion: http://planning.cs.uiuc.edu/node198.html
-    :return: quaternion np.ndarray(4,)
-    """
-    u, v, w = np.random.uniform(0, 1, 3)
-    return np.array([np.sqrt(1 - u) * np.sin(2 * np.pi * v),
-                     np.sqrt(1 - u) * np.cos(2 * np.pi * v),
-                     np.sqrt(u) * np.sin(2 * np.pi * w),
-                     np.sqrt(u) * np.cos(2 * np.pi * w)])
 
 
 def gen_config(num_objects: int, radius_mu: float, radius_std: float, max_tries=200,

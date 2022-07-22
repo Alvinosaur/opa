@@ -640,6 +640,8 @@ class Policy(object):
         )
         pos_attract_feat = self.policy_network.pos_pref_feat_train[Params.ATTRACT_IDX].detach(
         )
+        strong_pos_attract_feat = self.policy_network.pos_pref_feat_train[Params.GOAL_IDX].detach(
+        )
         rot_care_feat = self.policy_network.rot_pref_feat_train[Params.CARE_ROT_IDX].detach(
         )
 
@@ -660,6 +662,8 @@ class Policy(object):
                 obj_pos_feats.append(torch.clone(pos_repel_feat))
             elif pos_obj_types[i] == Params.ATTRACT_IDX:
                 obj_pos_feats.append(torch.clone(pos_attract_feat))
+            elif pos_obj_types[i] == Params.GOAL_IDX:
+                obj_pos_feats.append(torch.clone(strong_pos_attract_feat))
             else:  # None
                 obj_pos_feats.append(torch.clone(self.pos_ignore_feat))
             obj_pos_feats[-1].requires_grad = pos_requires_grad[i]

@@ -20,7 +20,7 @@ import torch
 from dataset import Dataset
 from data_params import Params
 from model import Policy, PolicyNetwork, encode_ori_3D, encode_ori_2D, pose_to_model_input
-from data_generation import rand_quat
+from utils import rand_quat
 
 seed = 444
 np.random.seed(seed)

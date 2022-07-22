@@ -29,23 +29,24 @@ from viz_3D import Viz3DROSPublisher, pose_to_msg, msg_to_pose
 from exp1_cup_low_table_sim import robot_table_surface_projections
 from data_generation import rand_quat
 
-World2Net = 5.0
+World2Net = 10.0
 Net2World = 1 / World2Net
 
-ee_min_pos_world = np.array([0.23, -0.475, -0.1])
+ee_min_pos_world = np.array([0.23, -0.475, -0.175])
 ee_max_pos_world = np.array([0.725, 0.55, 0.35])
 num_objects = 1
-object_radii = np.array([3.0] * num_objects)[:,
+object_radii = np.array([7.0] * num_objects)[:,
                                              np.newaxis]  # defined on net scale
 goal_rot_radius = np.array([2.0])
-goal_pos_world = np.array([0.4, -0.475, 0.1])
+goal_pos_world = np.array([0.4, -0.475, 0.0])
 goal_ori_quat = np.array([7.07106781e-01, 7.07106781e-01, 4.32978028e-17, 4.32978028e-17])
-start_pos_world = np.array([0.4, 0.525, 0.0])
-# start_pos_world = np.array([0.63094842 , 0.08953369,  0.13958801])
+# start_pos_world = np.array([0.4, 0.525, -0.1])
+start_pos_world = np.array([0.343, 0.512, -0.175])
 start_ori_quat = np.array([7.07106781e-01, 7.07106781e-01, 4.32978028e-17, 4.32978028e-17])
 # start_ori_quat = np.array([-0.75432945, -0.00351821, -0.64973774,
 #  -0.09389131])
-inspection_pos_world = np.array([0.7, 0.2, 0.13])
+standing_human_height = 0.6
+inspection_pos_world = np.array([0.7, 0.1, -0.1 + standing_human_height])
 inspection_ori_quat = np.array([0, 0, 0, 1.0])
 obstacles = []
 
@@ -61,7 +62,7 @@ need_update = False
 
 DEBUG = False
 if DEBUG:
-    dstep = 0.02
+    dstep = 0.05
     ros_delay = 0.1
 else:
     dstep = 0.13
@@ -110,7 +111,8 @@ def parse_arguments():
 
 def reach_start_pos(viz_3D_publisher, start_pose_net, goal_pose_net, object_poses_net, object_radii):
     global cur_pos_world, cur_ori_quat
-    global start_pos_world, start_ori_quat
+    start_pos_world = Net2World * start_pose_net[:3]
+    start_ori_quat = start_pose_net[3:]
     if DEBUG:
         cur_pos_world = np.copy(start_pos_world)
         cur_ori_quat = np.copy(start_ori_quat)
@@ -130,7 +132,8 @@ def reach_start_pos(viz_3D_publisher, start_pose_net, goal_pose_net, object_pose
             dist_to_start_ratio = min(pos_mag / (start_dist  + 1e-5), 1.0)
             target_ori_quat = interpolate_rotations(start_quat=cur_ori_quat, stop_quat=start_ori_quat, 
                                                     alpha=1-dist_to_start_ratio)
-            pose_pub.publish(pose_to_msg(np.concatenate([target_pos_world, target_ori_quat])))
+            pose_pub.publish(
+                pose_to_msg(np.concatenate([target_pos_world, target_ori_quat]), frame=ROBOT_FRAME))
             is_intervene_pub.publish(False)
 
             # Publish objects
@@ -143,16 +146,16 @@ def reach_start_pos(viz_3D_publisher, start_pose_net, goal_pose_net, object_pose
                 Params.agent_color_rgb,
             ]
             # force_colors = object_colors + [Params.goal_color_rgb]
-            all_objects = [Object(pos=pose[0:POS_DIM], ori=[0.7627784,  -0.00479786 , 0.6414479,   0.08179578],
-                                      radius=radius) for pose, radius in
+            all_objects = [Object(pos=Net2World * pose[0:POS_DIM], ori=[0.7627784,  -0.00479786 , 0.6414479,   0.08179578],
+                                      radius=Net2World * radius) for pose, radius in
                                zip(object_poses_net, object_radii)]
             all_objects += [
                 Object(
-                    pos=start_pose_net[0:POS_DIM], radius=Params.agent_radius, ori=start_pose_net[POS_DIM:]),
+                    pos=Net2World * start_pose_net[0:POS_DIM], radius=Net2World * Params.agent_radius, ori=start_pose_net[POS_DIM:]),
                 Object(
-                    pos=goal_pose_net[0:POS_DIM], radius=goal_rot_radius.item(), ori=goal_pose_net[POS_DIM:]),
+                    pos=Net2World * goal_pose_net[0:POS_DIM], radius=Net2World * goal_rot_radius.item(), ori=goal_pose_net[POS_DIM:]),
                 Object(
-                    pos=cur_pos_world * World2Net, radius=Params.agent_radius, ori=cur_ori_quat)
+                    pos=cur_pos_world, radius=Net2World * Params.agent_radius, ori=cur_ori_quat)
             ]
             viz_3D_publisher.publish(objects=all_objects, object_colors=all_object_colors,)
 
@@ -165,9 +168,10 @@ def reach_start_pos(viz_3D_publisher, start_pose_net, goal_pose_net, object_pose
                 dEE_pos_running_avg.update(dEE_pos)
                 prev_pos_world = np.copy(cur_pos_world)
                 pos_error = np.linalg.norm(cur_pos_world - start_pos_world)
-                print("Waiting to reach start pos error: %.3f,  change: %.3f" %
-                      (pos_error, dEE_pos_running_avg.avg))
+                print("Waiting to reach start pos (%s) error: %.3f,  change: %.3f" %
+                      (np.array2string(target_pos_world, precision=2), pos_error, dEE_pos_running_avg.avg))
             rospy.sleep(ros_delay)
+        rospy.sleep(0.5)  # pause to let arm finish converging
 
 
 if __name__ == "__main__":
@@ -183,6 +187,7 @@ if __name__ == "__main__":
     pose_pub = rospy.Publisher(
         "/kinova_demo/pose_cmd", PoseStamped, queue_size=10)
     is_intervene_pub = rospy.Publisher("/is_intervene", Bool, queue_size=10)
+    gripper_pub = rospy.Publisher("/siemens_demo/gripper_cmd", Bool, queue_size=10)
 
     # Listen for keypresses marking start/stop of human intervention
     listener = keyboard.Listener(
@@ -221,7 +226,7 @@ if __name__ == "__main__":
     train_rot, train_pos = True, False
     # NOTE: not training "object_types", purely object identifiers
     object_idxs = np.arange(num_objects)
-    pos_obj_types = [Params.ATTRACT_IDX] * num_objects
+    pos_obj_types = [Params.GOAL_IDX] * num_objects
     pos_requires_grad = [train_pos] * num_objects
     rot_obj_types = [None] * num_objects
     rot_requires_grad = [train_rot] * num_objects
@@ -265,7 +270,7 @@ if __name__ == "__main__":
 
     # Optionally view with ROS Rviz
     if args.view_ros:
-        viz_3D_publisher = Viz3DROSPublisher(num_objects=num_objects)
+        viz_3D_publisher = Viz3DROSPublisher(num_objects=num_objects, frame=ROBOT_FRAME)
         # TODO:
         object_colors = [
             (0, 255, 0),
@@ -276,52 +281,6 @@ if __name__ == "__main__":
             Params.agent_color_rgb,
         ]
         force_colors = object_colors + [Params.goal_color_rgb]
-
-    # Interpolate through different Euler angles and rotation pref feats
-    # n_interp = 25
-    # pos_attract_feat = policy.policy_network.pos_pref_feat_train[Params.ATTRACT_IDX].detach(
-    # )
-    # rot_care_feat = policy.policy_network.rot_pref_feat_train[Params.CARE_ROT_IDX].detach(
-    # )
-    # rot_ignore_feat = policy.policy_network.rot_pref_feat_train[Params.IGNORE_ROT_IDX].detach(
-    # )
-    # rot_feats_linspace = torch.linspace(
-    #     torch.min(rot_ignore_feat, rot_care_feat).item() - 0.1,
-    #     torch.max(rot_ignore_feat, rot_care_feat).item() + 0.1,
-    #     n_interp).to(DEVICE)
-    # angles = np.linspace(0, 2 * np.pi, n_interp)
-    # results = [[] for _ in range(n_interp)]
-    # pbar = tqdm(total=n_interp**4)
-    # for feat_i, rot_feat in enumerate(rot_feats_linspace):
-    #     for rx in angles:
-    #         for ry in angles:
-    #             for rz in angles:
-    #                 ori_quat = R.from_euler('xyz', [rx, ry, rz]).as_quat()
-
-    #                 obj_pos_feats = [pos_attract_feat]
-    #                 obj_rot_feats = [rot_feat.view(1)]
-    #                 obj_rot_offsets = [torch.from_numpy(
-    #                     ori_quat).to(DEVICE).to(torch.float32)]
-    #                 policy.update_obj_feats(
-    #                     obj_pos_feats, obj_rot_feats, obj_rot_offsets)
-
-    #                 with torch.no_grad():
-    #                     loss, pred_traj = adaptation_loss(model=policy.policy_network,
-    #                                                       batch_data=batch_data,
-    #                                                       train_pos=False, train_rot=True,
-    #                                                       dstep=dstep)
-    #                 error_ang = np.arccos(np.abs(target_ori @ ori_quat))
-    #                 results[feat_i].append([
-    #                     rot_feat.item(),
-    #                     np.array([rx, ry, rz]),
-    #                     target_ori_xyz,
-    #                     error_ang,
-    #                     loss.item()])
-
-    #                 pbar.update(1)
-
-    # np.save("rot_3D_loss_results.npy", results)
-    # exit()
 
     # Update policy
     print("Care and Ignore feats: ",
@@ -337,12 +296,31 @@ if __name__ == "__main__":
 
     it = 0
     pose_error_tol = 0.07
+    max_pose_error_tol = 0.4  # too far to be considered converged and not moving
     del_pose_tol = 0.005  # over del_pose_interval iterations
     perturb_pose_traj_world = []
     override_pred_delay = False
-    for exp_iter in range(6):
+    # [default, rot1 intervene, rot1, rot1 + stand up, rot2 intervene, rot2]
+    command_kinova_gripper(gripper_pub, cmd_open=True)
+    for exp_iter in range(7):
+        # exp_iter 3 and above
+        # if exp_iter >= 3:
+        #     inspection_pos_world[-1] = standing_human_height
+
+        object_pos_net = World2Net * inspection_pos_world
+        object_poses_net = np.concatenate(
+            [object_pos_net, inspection_ori_quat], axis=-1)[np.newaxis]
+        object_poses_tensor = torch.from_numpy(pose_to_model_input(
+            object_poses_net)).to(torch.float32).to(DEVICE)
+        objects_torch = torch.cat(
+            [object_poses_tensor, object_radii_torch], dim=-1).unsqueeze(0)
+
         # reach initial pose
+        approach_pose_net = np.copy(start_pose_net) # to properly move down to final start pose and pick up object
+        approach_pose_net[2] += 0.2 * World2Net
+        reach_start_pos(viz_3D_publisher, approach_pose_net, goal_pose_net, object_poses_net, object_radii)
         reach_start_pos(viz_3D_publisher, start_pose_net, goal_pose_net, object_poses_net, object_radii)
+        command_kinova_gripper(gripper_pub, cmd_open=False)
 
         # initialize target pose variables
         local_target_pos_world = np.copy(cur_pos_world)
@@ -353,7 +331,8 @@ if __name__ == "__main__":
         del_pose_running_avg = RunningAverage(length=5, init_vals=1e10)
 
         prev_pose_world = None
-        while not rospy.is_shutdown() and pose_error > pose_error_tol and del_pose_running_avg.avg > del_pose_tol:
+        while (not rospy.is_shutdown() and pose_error > pose_error_tol and 
+                (del_pose_running_avg.avg > del_pose_tol or pose_error > max_pose_error_tol)):
             cur_pose_world = np.concatenate([cur_pos_world, cur_ori_quat])
             cur_pos_net = cur_pos_world * World2Net
             cur_pose_net = np.concatenate([cur_pos_net, cur_ori_quat])
@@ -365,7 +344,7 @@ if __name__ == "__main__":
             if need_update and not DEBUG:
                 # DEBUG REMOVE
                 for i in range(5):
-                    pose_pub.publish(pose_to_msg(cur_pose_world))
+                    pose_pub.publish(pose_to_msg(cur_pose_world, frame=ROBOT_FRAME))
                 rospy.sleep(0.1)
                 is_intervene = False
                 is_intervene_pub.publish(is_intervene)
@@ -457,21 +436,22 @@ if __name__ == "__main__":
 
             # Optionally view with ROS
             if args.view_ros:
-                all_objects = [Object(pos=pose[0:POS_DIM], ori=inspection_ori_quat,
-                                      radius=radius) for pose, radius in
+                all_objects = [Object(pos=Net2World * pose[0:POS_DIM], ori=inspection_ori_quat,
+                                      radius=Net2World * radius) for pose, radius in
                                zip(object_poses_net, object_radii)]
                 all_objects += [
                     Object(
-                        pos=start_pose_net[0:POS_DIM], radius=Params.agent_radius, ori=start_pose_net[POS_DIM:]),
+                        pos=Net2World * start_pose_net[0:POS_DIM], radius=Net2World * Params.agent_radius, ori=start_pose_net[POS_DIM:]),
                     Object(
-                        pos=goal_pose_net[0:POS_DIM], radius=goal_rot_radius.item(), ori=goal_pose_net[POS_DIM:]),
+                        pos=Net2World * goal_pose_net[0:POS_DIM], radius=Net2World * goal_rot_radius.item(), ori=goal_pose_net[POS_DIM:]),
                     Object(
-                        pos=cur_pose_net[0:POS_DIM], radius=Params.agent_radius, ori=cur_pose_net[POS_DIM:])
+                        pos=Net2World * cur_pose_net[0:POS_DIM], radius=Net2World * Params.agent_radius, ori=cur_pose_net[POS_DIM:])
                 ]
                 agent_traj = np.vstack(
-                    [cur_pose_net, np.concatenate([Net2World * local_target_pos_world, cur_ori_quat])])
+                    [Net2World * cur_pose_net, np.concatenate([Net2World * local_target_pos_world, cur_ori_quat])])
                 if isinstance(object_forces, torch.Tensor):
                     object_forces = object_forces[0].detach().cpu().numpy()
+
                 viz_3D_publisher.publish(objects=all_objects, agent_traj=agent_traj,
                                          expert_traj=None, object_colors=all_object_colors,
                                          object_forces=object_forces, force_colors_rgb=force_colors)
@@ -489,7 +469,7 @@ if __name__ == "__main__":
             if not DEBUG:
                 target_pose = np.concatenate(
                     [local_target_pos_world, interp_rot])
-                pose_pub.publish(pose_to_msg(target_pose))
+                pose_pub.publish(pose_to_msg(target_pose, frame=ROBOT_FRAME))
                 # print("cur pose: ", np.concatenate([cur_pos_world, cur_ori_quat]))
                 # print("target pose: ", target_pose)
                 # print("target ori: ", interp_rot)
@@ -512,4 +492,7 @@ if __name__ == "__main__":
             prev_pose_world = np.copy(cur_pose_world)
             rospy.sleep(0.3)
 
-        print(f"Finished! Error {pose_error} vs tol {pose_error_tol}")
+        print(f"Finished! Error {pose_error} vs tol {pose_error_tol}, \nderror {del_pose_running_avg.avg} vs tol {del_pose_tol}")
+        print("Opening gripper to release item")
+        command_kinova_gripper(gripper_pub, cmd_open=True)
+
