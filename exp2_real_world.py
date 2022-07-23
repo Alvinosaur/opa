@@ -3,6 +3,7 @@ Copyright (c) 2022 Alvin Shek
 This work is licensed under the terms of the MIT license.
 For a copy, see <https://opensource.org/licenses/MIT>.
 """
+from curses.ascii import CAN
 import numpy as np
 import os
 import argparse
@@ -15,7 +16,7 @@ from pynput import keyboard
 
 import rospy
 from geometry_msgs.msg import PoseStamped
-from std_msgs.msg import Bool
+from std_msgs.msg import Bool, Float32
 
 import torch
 
@@ -31,24 +32,69 @@ from data_generation import rand_quat
 
 World2Net = 10.0
 Net2World = 1 / World2Net
-
-ee_min_pos_world = np.array([0.23, -0.475, -0.175])
+num_objects = 1 + 2  # + 2 for obstacles added later
+ee_min_pos_world = np.array([0.23, -0.475, -0.1])
 ee_max_pos_world = np.array([0.725, 0.55, 0.35])
-num_objects = 1
-object_radii = np.array([7.0] * num_objects)[:,
-                                             np.newaxis]  # defined on net scale
+inspection_radii = np.array([7.0])[:, np.newaxis]  # defined on net scale
 goal_rot_radius = np.array([2.0])
-goal_pos_world = np.array([0.4, -0.475, 0.0])
-goal_ori_quat = np.array([7.07106781e-01, 7.07106781e-01, 4.32978028e-17, 4.32978028e-17])
+goal_pos_world = np.array([0.4, -0.475, 0.1])
+goal_ori_quat = np.array([0.707, 0.707, 0, 0])
 # start_pos_world = np.array([0.4, 0.525, -0.1])
-start_pos_world = np.array([0.343, 0.512, -0.175])
-start_ori_quat = np.array([7.07106781e-01, 7.07106781e-01, 4.32978028e-17, 4.32978028e-17])
+start_pos_world = None
+HOME_POSE_NET = np.array([3.73, 1.0, 1.3, 0.707, 0.707, 0, 0])
+BOX_MASS = 0.3
+CAN_MASS = 0.4
+start_poses = [
+    # boxes
+    np.array([0.2, 0.35, -0.131]),
+    np.array([0.2, 0.465, -0.131]),
+    np.array([0.22, 0.58, -0.131]),
+
+    # cans
+    np.array([0.333, 0.43, -0.16]),
+    np.array([0.333, 0.545, -0.16]),
+    np.array([0.43, 0.43, -0.16]),
+    np.array([0.43, 0.545, -0.16]),
+]
+start_ori_quats = [
+    # boxes
+    np.array([0, 1., 0, 0]),
+    np.array([0, 1., 0, 0]),
+    np.array([0, 1., 0, 0]),
+
+    # cans
+    np.array([0.707, 0.707, 0, 0]),
+    np.array([0.707, 0.707, 0, 0]),
+    np.array([0.707, 0.707, 0, 0]),
+    np.array([0.707, 0.707, 0, 0]),
+]
+extra_masses = [
+    BOX_MASS,
+    BOX_MASS,
+    BOX_MASS, 
+
+    CAN_MASS,
+    CAN_MASS,
+    CAN_MASS,
+    CAN_MASS,
+]
+# import ipdb
+# ipdb.set_trace()
+
 # start_ori_quat = np.array([-0.75432945, -0.00351821, -0.64973774,
 #  -0.09389131])
 standing_human_height = 0.6
-inspection_pos_world = np.array([0.7, 0.1, -0.1 + standing_human_height])
+inspection_pos_world = np.array([0.7, 0.1, -0.1])
 inspection_ori_quat = np.array([0, 0, 0, 1.0])
-obstacles = []
+obstacles_pos_world = [
+    np.array([0.484, 0.1, 0.0]),
+    np.array([0.734, -0.3, 0.0]),
+]
+obstacles_ori_quat = [
+    np.array([0,0,0,1.]),
+    np.array([0,0,0,1.]),
+]
+obstacles_radii = np.array([1.5, 1.5])[:, np.newaxis]
 
 # Need more adaptation steps because this example is more difficult
 custom_num_pos_net_updates = 20
@@ -113,11 +159,14 @@ def reach_start_pos(viz_3D_publisher, start_pose_net, goal_pose_net, object_pose
     global cur_pos_world, cur_ori_quat
     start_pos_world = Net2World * start_pose_net[:3]
     start_ori_quat = start_pose_net[3:]
+    start_pose_world = np.concatenate([start_pos_world, start_ori_quat])
     if DEBUG:
         cur_pos_world = np.copy(start_pos_world)
         cur_ori_quat = np.copy(start_ori_quat)
         # cur_pos_world = np.copy(inspection_pos_world)
         # cur_ori_quat = np.copy(inspection_ori_quat)
+        return 
+
     else:
         start_dist = np.linalg.norm(start_pos_world - cur_pos_world)
         pose_error = 1e10
@@ -129,6 +178,7 @@ def reach_start_pos(viz_3D_publisher, start_pose_net, goal_pose_net, object_pose
             pos_vec = start_pos_world - cur_pos_world
             pos_mag = np.linalg.norm(pos_vec)
             target_pos_world = cur_pos_world + pos_vec * min(pos_mag, dstep) / pos_mag
+            # target_pos_world = cur_pos_world + np.array([0, -0.1, 0.2])
             dist_to_start_ratio = min(pos_mag / (start_dist  + 1e-5), 1.0)
             target_ori_quat = interpolate_rotations(start_quat=cur_ori_quat, stop_quat=start_ori_quat, 
                                                     alpha=1-dist_to_start_ratio)
@@ -173,6 +223,9 @@ def reach_start_pos(viz_3D_publisher, start_pose_net, goal_pose_net, object_pose
             rospy.sleep(ros_delay)
         rospy.sleep(0.5)  # pause to let arm finish converging
 
+        print("Final error: ", pose_error)
+        print(cur_pos_world, start_pos_world)
+
 
 if __name__ == "__main__":
     args = parse_arguments()
@@ -188,6 +241,7 @@ if __name__ == "__main__":
         "/kinova_demo/pose_cmd", PoseStamped, queue_size=10)
     is_intervene_pub = rospy.Publisher("/is_intervene", Bool, queue_size=10)
     gripper_pub = rospy.Publisher("/siemens_demo/gripper_cmd", Bool, queue_size=10)
+    extra_mass_pub = rospy.Publisher("/gripper_extra_mass", Float32, queue_size=10)
 
     # Listen for keypresses marking start/stop of human intervention
     listener = keyboard.Listener(
@@ -216,20 +270,23 @@ if __name__ == "__main__":
                             hidden_dim=train_args['hidden_dim'],
                             device=DEVICE).to(DEVICE)
     network.load_state_dict(
-        torch.load(os.path.join(Params.model_root, args.model_name, "model_%d.h5" % args.loaded_epoch)))
+        torch.load(
+            os.path.join(Params.model_root, args.model_name, "model_%d.h5" % args.loaded_epoch),
+            map_location=DEVICE))
     policy = Policy(network)
 
     # define scene objects and whether or not we care about their pos/ori
     # In exp3, don't know anything about the scanner or table. Initialize both
     # position and orientation features as None with requires_grad=True
     calc_rot, calc_pos = True, True
-    train_rot, train_pos = True, False
+    train_rot, train_pos = True, True
     # NOTE: not training "object_types", purely object identifiers
     object_idxs = np.arange(num_objects)
-    pos_obj_types = [Params.GOAL_IDX] * num_objects
-    pos_requires_grad = [train_pos] * num_objects
+    pos_obj_types = [Params.GOAL_IDX, None, None]
+    # pos_obj_types = [Params.ATTRACT_IDX, None, None]
+    pos_requires_grad = [False, True, True]
     rot_obj_types = [None] * num_objects
-    rot_requires_grad = [train_rot] * num_objects
+    rot_requires_grad = [True, True, True]
     policy.init_new_objs(pos_obj_types=pos_obj_types, rot_obj_types=rot_obj_types,
                          pos_requires_grad=pos_requires_grad, rot_requires_grad=rot_requires_grad)
     obj_pos_feats = policy.obj_pos_feats
@@ -238,35 +295,23 @@ if __name__ == "__main__":
     # saved_weights = torch.load("exp2_saved_weights_v2.pth")
     # policy.update_obj_feats(**saved_weights)
 
-    # Set start robot pose
-    start_pose_world = np.concatenate([start_pos_world, start_ori_quat])
-    start_pose_net = np.concatenate(
-        [start_pos_world * World2Net, start_ori_quat])
-
     # Define final goal pose (drop-off bin)
     goal_pose_net = np.concatenate([goal_pos_world * World2Net, goal_ori_quat])
     goal_pose_world = np.concatenate([goal_pos_world, goal_ori_quat])
 
-    # Define inspection zone pose
-    object_pos_net = World2Net * inspection_pos_world
-    object_poses_net = np.concatenate(
-        [object_pos_net, inspection_ori_quat], axis=-1)[np.newaxis]
-
     # Convert np arrays to torch tensors for model input
-    start_tensor = torch.from_numpy(
-        pose_to_model_input(start_pose_net[np.newaxis])).to(torch.float32).to(DEVICE)
     agent_radius_tensor = torch.tensor(
         [Params.agent_radius], device=DEVICE).view(1, 1)
     goal_rot_radii = torch.from_numpy(goal_rot_radius).to(
         torch.float32).to(DEVICE).view(1, 1)
-    object_radii_torch = torch.from_numpy(object_radii).to(
-        torch.float32).to(DEVICE).view(num_objects, 1)
     object_idxs_tensor = torch.from_numpy(object_idxs).to(
         torch.long).to(DEVICE).unsqueeze(0)
-    object_poses_tensor = torch.from_numpy(pose_to_model_input(
-        object_poses_net)).to(torch.float32).to(DEVICE)
-    objects_torch = torch.cat(
-        [object_poses_tensor, object_radii_torch], dim=-1).unsqueeze(0)
+    obstacles_radii_torch = torch.from_numpy(obstacles_radii).to(
+                                torch.float32).to(DEVICE).view(-1, 1)
+    inspection_radii_torch = torch.from_numpy(inspection_radii).to(
+                                torch.float32).to(DEVICE).view(-1, 1)
+    object_radii_torch = torch.vstack([inspection_radii_torch, obstacles_radii_torch])
+    object_radii = np.vstack([inspection_radii, obstacles_radii])
 
     # Optionally view with ROS Rviz
     if args.view_ros:
@@ -274,6 +319,8 @@ if __name__ == "__main__":
         # TODO:
         object_colors = [
             (0, 255, 0),
+            (0, 0, 255),
+            (255, 0, 0),
         ]
         all_object_colors = object_colors + [
             Params.start_color_rgb,
@@ -282,11 +329,12 @@ if __name__ == "__main__":
         ]
         force_colors = object_colors + [Params.goal_color_rgb]
 
-    # Update policy
-    print("Care and Ignore feats: ",
-          policy.policy_network.rot_pref_feat_train[Params.CARE_ROT_IDX].detach(
-          ).cpu().numpy(),
-          policy.policy_network.rot_pref_feat_train[Params.IGNORE_ROT_IDX].detach().cpu().numpy())
+    # Define pretrained feature bounds for random initialization
+    pos_feat_min = torch.min(policy.policy_network.pos_pref_feat_train[Params.ATTRACT_IDX],
+                             policy.policy_network.pos_pref_feat_train[Params.REPEL_IDX]).item()
+    pos_feat_max = torch.max(policy.policy_network.pos_pref_feat_train[Params.ATTRACT_IDX],
+                             policy.policy_network.pos_pref_feat_train[Params.REPEL_IDX]).item()
+
     rot_feat_min = torch.min(policy.policy_network.rot_pref_feat_train[Params.CARE_ROT_IDX],
                              policy.policy_network.rot_pref_feat_train[Params.IGNORE_ROT_IDX]).item()
     rot_feat_max = torch.max(policy.policy_network.rot_pref_feat_train[Params.CARE_ROT_IDX],
@@ -296,31 +344,64 @@ if __name__ == "__main__":
 
     it = 0
     pose_error_tol = 0.07
-    max_pose_error_tol = 0.4  # too far to be considered converged and not moving
+    max_pose_error_tol = 0.2  # too far to be considered converged and not moving
     del_pose_tol = 0.005  # over del_pose_interval iterations
     perturb_pose_traj_world = []
     override_pred_delay = False
-    # [default, rot1 intervene, rot1, rot1 + stand up, rot2 intervene, rot2]
+    # [box1 intervene rot finish (don't reset to start), box2 watch, 
+    # box3 (pretend, need to buy) add new obstacles show online repulsion from them, 
+    # box4 watch final behavior
+    # can1 intervene rot finish, can2 watch, can3 stand up and watch
     command_kinova_gripper(gripper_pub, cmd_open=True)
-    for exp_iter in range(7):
-        # exp_iter 3 and above
-        # if exp_iter >= 3:
-        #     inspection_pos_world[-1] = standing_human_height
+    num_exps = len(start_poses)
+    # num_exps = 3
+    for exp_iter in range(num_exps):  # +1 for original start pos
+        # set extra mass of object to pick up
+        extra_mass = extra_masses[exp_iter]
 
-        object_pos_net = World2Net * inspection_pos_world
-        object_poses_net = np.concatenate(
-            [object_pos_net, inspection_ori_quat], axis=-1)[np.newaxis]
-        object_poses_tensor = torch.from_numpy(pose_to_model_input(
-            object_poses_net)).to(torch.float32).to(DEVICE)
+        # Set start robot pose
+        start_pos_world = start_poses[exp_iter]
+        start_ori_quat = start_ori_quats[exp_iter]
+        start_pose_world = np.concatenate([start_pos_world, start_ori_quat])
+        start_pose_net = np.concatenate(
+            [start_pos_world * World2Net, start_ori_quat])
+        start_tensor = torch.from_numpy(
+            pose_to_model_input(start_pose_net[np.newaxis])).to(torch.float32).to(DEVICE)
+
+        if exp_iter == num_exps - 1:
+            inspection_pos_world[-1] += standing_human_height
+        inspection_pos_net = World2Net * inspection_pos_world
+        inspection_pose_net = np.concatenate(
+            [inspection_pos_net, inspection_ori_quat], axis=-1)[np.newaxis]
+        inspection_pose_tensor = torch.from_numpy(pose_to_model_input(
+                inspection_pose_net)).to(torch.float32).to(DEVICE)
+
+        obstacles_pos_net = World2Net * np.vstack(obstacles_pos_world)
+        obstacles_pose_net = np.concatenate(
+            [obstacles_pos_net, obstacles_ori_quat], axis=-1)
+        obstacles_poses_tensor = torch.from_numpy(pose_to_model_input(
+            obstacles_pose_net)).to(torch.float32).to(DEVICE)
+
+        object_poses_net = np.vstack([inspection_pose_net, obstacles_pose_net])
+        objects_tensor = torch.cat(
+            [inspection_pose_tensor, obstacles_poses_tensor], dim=0)
         objects_torch = torch.cat(
-            [object_poses_tensor, object_radii_torch], dim=-1).unsqueeze(0)
+            [objects_tensor, object_radii_torch], dim=-1).unsqueeze(0)
 
         # reach initial pose
-        approach_pose_net = np.copy(start_pose_net) # to properly move down to final start pose and pick up object
+        approach_pose_net = np.copy(start_pose_net)
         approach_pose_net[2] += 0.2 * World2Net
-        reach_start_pos(viz_3D_publisher, approach_pose_net, goal_pose_net, object_poses_net, object_radii)
-        reach_start_pos(viz_3D_publisher, start_pose_net, goal_pose_net, object_poses_net, object_radii)
+        reach_start_pos(viz_3D_publisher, HOME_POSE_NET, goal_pose_net, [], [])
+        reach_start_pos(viz_3D_publisher, approach_pose_net, goal_pose_net, [], [])
+        reach_start_pos(viz_3D_publisher, start_pose_net, goal_pose_net, [], [])
+        # exit()
         command_kinova_gripper(gripper_pub, cmd_open=False)
+        
+        # once object is grabbed, set new mass
+        for i in range(3): extra_mass_pub.publish(Float32(extra_mass))
+
+        # move back up to approach pose
+        reach_start_pos(viz_3D_publisher, approach_pose_net, goal_pose_net, [], [])
 
         # initialize target pose variables
         local_target_pos_world = np.copy(cur_pos_world)
@@ -359,7 +440,7 @@ if __name__ == "__main__":
                 perturb_pos_traj_world_interp = np.linspace(
                     start=perturb_pose_traj_world[0][0:POS_DIM], stop=perturb_pose_traj_world[-1][0:POS_DIM], num=T)
                 final_perturb_ori = perturb_pose_traj_world[-1][POS_DIM:]
-                print("final perturbed ori:", final_perturb_ori)
+
                 perturb_ori_traj = np.copy(final_perturb_ori)[
                     np.newaxis, :].repeat(T, axis=0)
                 perturb_pos_traj_net = perturb_pos_traj_world_interp * World2Net
@@ -371,9 +452,14 @@ if __name__ == "__main__":
                           object_idxs)
                 processed_sample = process_single_full_traj(sample)
 
+                # Update position
+                random_seed_adaptation(policy, processed_sample, train_pos=True, train_rot=False, 
+                            is_3D=True, num_objects=num_objects, loss_prop_tol=0.4, 
+                            pos_feat_max=pos_feat_max, pos_feat_min=pos_feat_min)
+
                 # Update rotation
                 random_seed_adaptation(policy, processed_sample, train_pos=False, train_rot=True, 
-                            is_3D=True, loss_prop_tol=0.4, 
+                            is_3D=True, num_objects=num_objects, loss_prop_tol=0.4, 
                             rot_feat_max=rot_feat_max, rot_feat_min=rot_feat_min)
 
                 # torch.save(
@@ -389,7 +475,11 @@ if __name__ == "__main__":
                 perturb_pose_traj_world = []
                 need_update = False
                 override_pred_delay = True
-                break  # start new trial with updated weights
+
+                # reach back to the pose before p
+                continue
+
+                # break  # start new trial with updated weights
 
             elif it % 2 == 0 or override_pred_delay:
                 override_pred_delay = False
@@ -481,7 +571,6 @@ if __name__ == "__main__":
                 cur_pos_world = local_target_pos_world
                 cur_ori_quat = interp_rot
 
-
             if it % 2 == 0:
                 print("Pos error: ", np.linalg.norm(local_target_pos_world - cur_pos_world) )
                 print("Ori error: ", np.linalg.norm(np.arccos(np.abs(cur_ori_quat @ local_target_ori))) )
@@ -494,5 +583,10 @@ if __name__ == "__main__":
 
         print(f"Finished! Error {pose_error} vs tol {pose_error_tol}, \nderror {del_pose_running_avg.avg} vs tol {del_pose_tol}")
         print("Opening gripper to release item")
-        command_kinova_gripper(gripper_pub, cmd_open=True)
+        rospy.sleep(0.3)
+        command_kinova_gripper(gripper_pub, cmd_open=True)  
+
+        # Once item released, set extra mass back to 0
+        for i in range(3): extra_mass_pub.publish(Float32(0.0))
+        rospy.sleep(0.3)
 
