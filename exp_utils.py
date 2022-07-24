@@ -190,6 +190,6 @@ def calc_pose_error(pose_quat1, pose_quat2, pos_scale=1, rot_scale=0.1):
 
 def command_kinova_gripper(pub, cmd_open):
     msg = Bool(cmd_open)
-    for i in range(3):
+    for i in range(5):
         pub.publish(msg)
         rospy.sleep(0.1)

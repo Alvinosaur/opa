@@ -5,6 +5,7 @@ For a copy, see <https://opensource.org/licenses/MIT>.
 """
 import os
 import time
+from importlib_metadata import requires
 import numpy as np
 import matplotlib.pyplot as plt
 import shutil
@@ -28,7 +29,8 @@ torch.manual_seed(seed)
 random.seed(seed)
 
 cuda = torch.cuda.is_available()
-DEVICE = "cuda" if cuda else "cpu"
+# DEVICE = "cuda:0" if cuda else "cpu"
+DEVICE = "cpu"
 if cuda:
     print("CUDA GPU!")
 else:
@@ -790,11 +792,13 @@ def perform_adaptation(policy: Policy, processed_sample: Tuple,
     return losses, pred_traj
 
 
-def random_seed_adaptation(policy: Policy, processed_sample, train_pos, train_rot, is_3D, 
-                           loss_prop_tol=0.4, 
-                           pos_feat_max=None, pos_feat_min=None, 
-                           rot_feat_max=None, rot_feat_min=None, 
-                           n_adapt_iters=30, max_trials=10):
+def random_seed_adaptation(policy: Policy, processed_sample, train_pos, train_rot, is_3D, num_objects,
+                           pos_feat_max, pos_feat_min, 
+                           rot_feat_max, rot_feat_min, 
+                           loss_prop_tol=0.4, clip_params=True,
+                           n_adapt_iters=30, max_trials=10,
+                           pos_requires_grad=None,
+                           rot_requires_grad=None):
     best_rot_feats, best_rot_offsets = None, None
     best_pos_feats = None
 
@@ -803,28 +807,62 @@ def random_seed_adaptation(policy: Policy, processed_sample, train_pos, train_ro
     rot_offsets = policy.obj_rot_offsets
     device = pos_feats[0].device
     best_loss = np.Inf
-    for i in range(max_trials):
-        print("Trial {}".format(i))
+
+    gen_rand_pos_feat = lambda : torch.rand(1).to(device) * (pos_feat_max - pos_feat_min) + pos_feat_min
+    gen_rand_rot_feat = lambda : torch.rand(1).to(device) * (rot_feat_max - rot_feat_min) + rot_feat_min
+    gen_rand_rot_offset = lambda : torch.from_numpy(rand_quat()).to(device).to(torch.float32)
+
+    for seed_i in range(max_trials):
+        print("Trial {}".format(seed_i))
         if train_pos:
-            rand_pos_feat = torch.rand(1).to(device) * \
-                (pos_feat_max - pos_feat_min) + pos_feat_min
-            rand_pos_feat.requires_grad = True
-            pos_feats = copy.deepcopy([rand_pos_feat])
+            if pos_requires_grad is None:
+                rand_pos_feat = [gen_rand_pos_feat() for _ in range(num_objects)]
+                for obj_i in range(num_objects):
+                    rand_pos_feat[obj_i].requires_grad = True
+            else:
+                rand_pos_feat = []
+                for obj_i in range(num_objects):
+                    if pos_requires_grad[obj_i]:
+                        rand_pos_feat.append(gen_rand_pos_feat())
+                        rand_pos_feat[-1].requires_grad = True
+                    else:
+                        rand_pos_feat.append(policy.obj_pos_feats[obj_i])
+                        assert rand_pos_feat[-1].requires_grad == False
+
+            pos_feats = rand_pos_feat
+
         if train_rot:
-            rand_rot_feat = torch.rand(1).to(device) * \
-                (rot_feat_max - rot_feat_min) + rot_feat_min
-            rand_rot_offset = torch.from_numpy(
-                rand_quat()).to(device).to(torch.float32)
-            rand_rot_feat.requires_grad = True
-            rand_rot_offset.requires_grad = True
-            rot_feats = copy.deepcopy([rand_rot_feat])
-            rot_offsets = copy.deepcopy([rand_rot_offset])
+            if rot_requires_grad is None:
+                rand_rot_feat = [gen_rand_rot_feat() for _ in range(num_objects)]
+                rand_rot_offset = [gen_rand_rot_offset() for _ in range(num_objects)]
+                for obj_i in range(num_objects):
+                    rand_rot_feat[obj_i].requires_grad = True
+                    rand_rot_offset[obj_i].requires_grad = True
+            else:
+                rand_rot_feat = []
+                rand_rot_offset = []
+                for obj_i in range(num_objects):
+                    if rot_requires_grad[obj_i]:
+                        rand_rot_feat.append(gen_rand_pos_feat())
+                        rand_rot_feat[-1].requires_grad = True
+
+                        rand_rot_offset.append(gen_rand_rot_offset())
+                        rand_rot_offset[-1].requires_grad = True
+                    else:
+                        rand_rot_feat.append(policy.obj_rot_feats[obj_i])
+                        assert rand_rot_feat[-1].requires_grad == False
+
+                        rand_rot_offset.append(policy.obj_rot_offsets[obj_i])
+                        assert rand_rot_offset[-1].requires_grad == False
+            
+            rot_feats = rand_rot_feat
+            rot_offsets = rand_rot_offset
 
         policy.update_obj_feats(pos_feats, rot_feats, rot_offsets)
         losses, _ = perform_adaptation(policy=policy, processed_sample=processed_sample,
                                         train_pos=train_pos, train_rot=train_rot,
                                         n_adapt_iters=n_adapt_iters, 
-                                        verbose=False, clip_params=True, is_3D=is_3D)
+                                        verbose=False, clip_params=clip_params, is_3D=is_3D)
         print("loss: %.3f -> %.3f" % (losses[0], losses[-1]))
         if losses[-1] < best_loss:
             best_loss = losses[-1]
@@ -834,6 +872,12 @@ def random_seed_adaptation(policy: Policy, processed_sample, train_pos, train_ro
 
         if losses[-1] < loss_prop_tol * losses[0]: 
             break
+    print("best_pos_feats:", best_pos_feats)
+    print("best_rot_feats:", best_rot_feats)
+    print("best_rot_offsets:", [v/v.norm() for v in best_rot_offsets])
+
+    # import ipdb
+    # ipdb.set_trace()
 
     return best_pos_feats, best_rot_feats, best_rot_offsets
 

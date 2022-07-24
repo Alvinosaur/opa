@@ -43,7 +43,7 @@ goal_ori_quat = np.array([0.707, 0.707, 0, 0])
 start_pos_world = None
 HOME_POSE_NET = np.array([3.73, 1.0, 1.3, 0.707, 0.707, 0, 0])
 BOX_MASS = 0.3
-CAN_MASS = 0.4
+CAN_MASS = 0.6
 start_poses = [
     # boxes
     np.array([0.2, 0.35, -0.131]),
@@ -83,9 +83,10 @@ extra_masses = [
 
 # start_ori_quat = np.array([-0.75432945, -0.00351821, -0.64973774,
 #  -0.09389131])
-standing_human_height = 0.6
 inspection_pos_world = np.array([0.7, 0.1, -0.1])
 inspection_ori_quat = np.array([0, 0, 0, 1.0])
+inspection_pos_world_2 = np.array([0.7, -0.3, 0.5])
+inspection_ori_quat_2 = R.from_euler("xyz", [0, 0, -45], degrees=True).as_quat()
 obstacles_pos_world = [
     np.array([0.484, 0.1, 0.0]),
     np.array([0.734, -0.3, 0.0]),
@@ -94,7 +95,7 @@ obstacles_ori_quat = [
     np.array([0,0,0,1.]),
     np.array([0,0,0,1.]),
 ]
-obstacles_radii = np.array([1.5, 1.5])[:, np.newaxis]
+obstacles_radii = np.array([2.0, 1.5])[:, np.newaxis]
 
 # Need more adaptation steps because this example is more difficult
 custom_num_pos_net_updates = 20
@@ -283,17 +284,27 @@ if __name__ == "__main__":
     # NOTE: not training "object_types", purely object identifiers
     object_idxs = np.arange(num_objects)
     pos_obj_types = [Params.GOAL_IDX, None, None]
+    # pos_obj_types = [Params.GOAL_IDX, Params.REPEL_IDX, Params.REPEL_IDX]
     # pos_obj_types = [Params.ATTRACT_IDX, None, None]
-    pos_requires_grad = [False, True, True]
-    rot_obj_types = [None] * num_objects
-    rot_requires_grad = [True, True, True]
+    pos_requires_grad = [False, True, False]
+    # rot_obj_types = [Params.CARE_ROT_IDX, None, None]
+    rot_obj_types = [None, None, None]
+    rot_requires_grad = [True, False, False]
+    # rot_offsets_debug = [
+    #     torch.tensor([-0.731, -0.677,  0.063,  0.058], device=DEVICE),
+    #     torch.tensor([0, 0, 0, 1], device=DEVICE),
+    #     torch.tensor([0, 0, 0, 1], device=DEVICE),
+    # ]
+    rot_offsets_debug = None
     policy.init_new_objs(pos_obj_types=pos_obj_types, rot_obj_types=rot_obj_types,
-                         pos_requires_grad=pos_requires_grad, rot_requires_grad=rot_requires_grad)
+                         pos_requires_grad=pos_requires_grad, rot_requires_grad=rot_requires_grad,
+                         rot_offsets=rot_offsets_debug)
     obj_pos_feats = policy.obj_pos_feats
 
     # # DEBUG LOAD SAVED WEIGHTS
-    # saved_weights = torch.load("exp2_saved_weights_v2.pth")
+    # saved_weights = torch.load("exp2_saved_weights_iter_4.pth")
     # policy.update_obj_feats(**saved_weights)
+    # print(saved_weights)
 
     # Define final goal pose (drop-off bin)
     goal_pose_net = np.concatenate([goal_pos_world * World2Net, goal_ori_quat])
@@ -369,7 +380,8 @@ if __name__ == "__main__":
             pose_to_model_input(start_pose_net[np.newaxis])).to(torch.float32).to(DEVICE)
 
         if exp_iter == num_exps - 1:
-            inspection_pos_world[-1] += standing_human_height
+            inspection_pos_world = inspection_pos_world_2
+            inspection_ori_quat = inspection_ori_quat_2
         inspection_pos_net = World2Net * inspection_pos_world
         inspection_pose_net = np.concatenate(
             [inspection_pos_net, inspection_ori_quat], axis=-1)[np.newaxis]
@@ -454,22 +466,27 @@ if __name__ == "__main__":
 
                 # Update position
                 random_seed_adaptation(policy, processed_sample, train_pos=True, train_rot=False, 
-                            is_3D=True, num_objects=num_objects, loss_prop_tol=0.4, 
-                            pos_feat_max=pos_feat_max, pos_feat_min=pos_feat_min)
+                            is_3D=True, num_objects=num_objects, loss_prop_tol=0.3, 
+                            pos_feat_max=pos_feat_max, pos_feat_min=pos_feat_min,
+                            rot_feat_max=rot_feat_max, rot_feat_min=rot_feat_min,
+                            pos_requires_grad=pos_requires_grad)
 
                 # Update rotation
-                random_seed_adaptation(policy, processed_sample, train_pos=False, train_rot=True, 
-                            is_3D=True, num_objects=num_objects, loss_prop_tol=0.4, 
-                            rot_feat_max=rot_feat_max, rot_feat_min=rot_feat_min)
+                best_pos_feats, best_rot_feats, best_rot_offsets = (
+                    random_seed_adaptation(policy, processed_sample, train_pos=False, train_rot=True, 
+                            is_3D=True, num_objects=num_objects, loss_prop_tol=0.3, 
+                            pos_feat_max=pos_feat_max, pos_feat_min=pos_feat_min,
+                            rot_feat_max=rot_feat_max, rot_feat_min=rot_feat_min,
+                            rot_requires_grad=rot_requires_grad))
 
-                # torch.save(
-                #     {
-                #         "obj_pos_feats": best_pos_feats,
-                #         "obj_rot_feats": best_rot_feats,
-                #         "obj_rot_offsets": best_rot_offsets
-                #     },
-                #     "exp2_saved_weights_v2.pth"
-                # )
+                torch.save(
+                    {
+                        "obj_pos_feats": best_pos_feats,
+                        "obj_rot_feats": best_rot_feats,
+                        "obj_rot_offsets": best_rot_offsets
+                    },
+                    f"exp2_saved_weights_iter_{exp_iter}.pth"
+                )
 
                 # reset the intervention data
                 perturb_pose_traj_world = []
