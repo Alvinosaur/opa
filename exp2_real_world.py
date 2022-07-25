@@ -37,24 +37,24 @@ ee_min_pos_world = np.array([0.23, -0.475, -0.1])
 ee_max_pos_world = np.array([0.725, 0.55, 0.35])
 inspection_radii = np.array([7.0])[:, np.newaxis]  # defined on net scale
 goal_rot_radius = np.array([2.0])
-goal_pos_world = np.array([0.4, -0.475, 0.1])
-goal_ori_quat = np.array([0.707, 0.707, 0, 0])
 # start_pos_world = np.array([0.4, 0.525, -0.1])
 start_pos_world = None
 HOME_POSE_NET = np.array([3.73, 1.0, 1.3, 0.707, 0.707, 0, 0])
 BOX_MASS = 0.3
 CAN_MASS = 0.6
+
+# Item pickup poses
 start_poses = [
     # boxes
-    np.array([0.2, 0.35, -0.131]),
-    np.array([0.2, 0.465, -0.131]),
-    np.array([0.22, 0.58, -0.131]),
+    np.array([0.2, 0.35, -0.09]),
+    np.array([0.2, 0.48, -0.09]),
+    np.array([0.2, 0.595, -0.11]),
 
     # cans
-    np.array([0.333, 0.43, -0.16]),
-    np.array([0.333, 0.545, -0.16]),
-    np.array([0.43, 0.43, -0.16]),
-    np.array([0.43, 0.545, -0.16]),
+    np.array([0.333, 0.38, -0.15]),
+    np.array([0.333, 0.51, -0.15]),
+    np.array([0.43, 0.38, -0.15]),
+    np.array([0.43, 0.51, -0.15]),
 ]
 start_ori_quats = [
     # boxes
@@ -63,11 +63,27 @@ start_ori_quats = [
     np.array([0, 1., 0, 0]),
 
     # cans
-    np.array([0.707, 0.707, 0, 0]),
-    np.array([0.707, 0.707, 0, 0]),
-    np.array([0.707, 0.707, 0, 0]),
-    np.array([0.707, 0.707, 0, 0]),
+    (R.from_euler("xyz", [0, -10, 0], degrees=True) * R.from_quat(np.array([0.707, 0.707, 0, 0]))).as_quat(),
+    (R.from_euler("xyz", [0, -10, 0], degrees=True) * R.from_quat(np.array([0.707, 0.707, 0, 0]))).as_quat(),
+    (R.from_euler("xyz", [0, -10, 0], degrees=True) * R.from_quat(np.array([0.707, 0.707, 0, 0]))).as_quat(),
+    (R.from_euler("xyz", [0, -10, 0], degrees=True) * R.from_quat(np.array([0.707, 0.707, 0, 0]))).as_quat()
 ]
+
+# Item ID's (if item == can, slide into grasp pose horizontally)
+BOX_ID = 0
+CAN_ID = 1
+item_ids = [
+    BOX_ID,
+    BOX_ID,
+    BOX_ID,
+
+    CAN_ID,
+    CAN_ID,
+    CAN_ID,
+    CAN_ID
+]
+
+# Item masses
 extra_masses = [
     BOX_MASS,
     BOX_MASS,
@@ -78,6 +94,20 @@ extra_masses = [
     CAN_MASS,
     CAN_MASS,
 ]
+
+# Item dropoff poses
+goal_poses = [
+    np.array([0.5, -0.6, 0.15]),
+    np.array([0.5, -0.58, 0.15]),
+    np.array([0.5, -0.56, 0.15]),
+    np.array([0.4, -0.6, 0.15]),
+    np.array([0.4, -0.585, 0.15]),
+    np.array([0.4, -0.575, 0.15]),
+    np.array([0.4, -0.56, 0.15]),
+]
+DROP_OFF_OFFSET = np.array([0.0, 0.0, -0.1])
+goal_ori_quats = start_ori_quats
+
 # import ipdb
 # ipdb.set_trace()
 
@@ -112,8 +142,8 @@ if DEBUG:
     dstep = 0.05
     ros_delay = 0.1
 else:
-    dstep = 0.13
-    ros_delay = 0.4
+    dstep = 0.15
+    ros_delay = 0.4  # NOTE: if modify this, must also modify rolling avg window of dpose
 
 
 def is_intervene_cb(key):
@@ -156,7 +186,8 @@ def parse_arguments():
 
     return args
 
-def reach_start_pos(viz_3D_publisher, start_pose_net, goal_pose_net, object_poses_net, object_radii):
+def reach_start_pos(viz_3D_publisher, start_pose_net, goal_pose_net, object_poses_net, object_radii,
+                    pose_tol=0.03, dpose_tol=1e-2, reaching_dstep=0.08):
     global cur_pos_world, cur_ori_quat
     start_pos_world = Net2World * start_pose_net[:3]
     start_ori_quat = start_pose_net[3:]
@@ -175,10 +206,17 @@ def reach_start_pos(viz_3D_publisher, start_pose_net, goal_pose_net, object_pose
         dEE_pos_running_avg = RunningAverage(length=5, init_vals=1e10)
         prev_pos_world = np.copy(cur_pos_world)
         while not rospy.is_shutdown() and (
-                cur_pos_world is None or (pose_error > 0.12 and dEE_pos_running_avg.avg > 1e-2 )):
+                cur_pos_world is None or (pose_error > pose_tol and dEE_pos_running_avg.avg > dpose_tol)):
             pos_vec = start_pos_world - cur_pos_world
+            # pos_vec[2] = np.clip(pos_vec[2], -0.06, 0.1)
             pos_mag = np.linalg.norm(pos_vec)
-            target_pos_world = cur_pos_world + pos_vec * min(pos_mag, dstep) / pos_mag
+            pos_vec = pos_vec * min(pos_mag, reaching_dstep) / pos_mag
+            # translation along certain directions involve certain joints which can be larger or smaller
+            # apply limits to horizontal movement to prevent 0th joint from rotating too fast
+            print("pos_vec before: ", pos_vec)
+            pos_vec = np.clip(pos_vec, a_min=[-0.05, -0.05, -0.1], a_max=[0.05, 0.05, 0.1])
+            print("pos_vec after: ", pos_vec)
+            target_pos_world = cur_pos_world + pos_vec
             # target_pos_world = cur_pos_world + np.array([0, -0.1, 0.2])
             dist_to_start_ratio = min(pos_mag / (start_dist  + 1e-5), 1.0)
             target_ori_quat = interpolate_rotations(start_quat=cur_ori_quat, stop_quat=start_ori_quat, 
@@ -218,9 +256,8 @@ def reach_start_pos(viz_3D_publisher, start_pose_net, goal_pose_net, object_pose
                 dEE_pos = np.linalg.norm(cur_pos_world - prev_pos_world)
                 dEE_pos_running_avg.update(dEE_pos)
                 prev_pos_world = np.copy(cur_pos_world)
-                pos_error = np.linalg.norm(cur_pos_world - start_pos_world)
                 print("Waiting to reach start pos (%s) error: %.3f,  change: %.3f" %
-                      (np.array2string(target_pos_world, precision=2), pos_error, dEE_pos_running_avg.avg))
+                      (np.array2string(target_pos_world, precision=2), pose_error, dEE_pos_running_avg.avg))
             rospy.sleep(ros_delay)
         rospy.sleep(0.5)  # pause to let arm finish converging
 
@@ -306,10 +343,6 @@ if __name__ == "__main__":
     # policy.update_obj_feats(**saved_weights)
     # print(saved_weights)
 
-    # Define final goal pose (drop-off bin)
-    goal_pose_net = np.concatenate([goal_pos_world * World2Net, goal_ori_quat])
-    goal_pose_world = np.concatenate([goal_pos_world, goal_ori_quat])
-
     # Convert np arrays to torch tensors for model input
     agent_radius_tensor = torch.tensor(
         [Params.agent_radius], device=DEVICE).view(1, 1)
@@ -354,7 +387,7 @@ if __name__ == "__main__":
     )
 
     it = 0
-    pose_error_tol = 0.07
+    pose_error_tol = 0.1
     max_pose_error_tol = 0.2  # too far to be considered converged and not moving
     del_pose_tol = 0.005  # over del_pose_interval iterations
     perturb_pose_traj_world = []
@@ -379,6 +412,12 @@ if __name__ == "__main__":
         start_tensor = torch.from_numpy(
             pose_to_model_input(start_pose_net[np.newaxis])).to(torch.float32).to(DEVICE)
 
+        # Set goal robot pose
+        goal_pos_world = goal_poses[exp_iter]
+        goal_ori_quat = goal_ori_quats[exp_iter]
+        goal_pose_net = np.concatenate([goal_pos_world * World2Net, goal_ori_quat])
+        goal_pose_world = np.concatenate([goal_pos_world, goal_ori_quat])
+
         if exp_iter == num_exps - 1:
             inspection_pos_world = inspection_pos_world_2
             inspection_ori_quat = inspection_ori_quat_2
@@ -402,18 +441,33 @@ if __name__ == "__main__":
 
         # reach initial pose
         approach_pose_net = np.copy(start_pose_net)
-        approach_pose_net[2] += 0.2 * World2Net
-        reach_start_pos(viz_3D_publisher, HOME_POSE_NET, goal_pose_net, [], [])
-        reach_start_pos(viz_3D_publisher, approach_pose_net, goal_pose_net, [], [])
+        approach_pose_net[2] += 0.3 * World2Net
+        reach_start_pos(viz_3D_publisher, HOME_POSE_NET, goal_pose_net, [], [], 
+                        pose_tol=0.1, dpose_tol=0.03, reaching_dstep=0.1)
+        reach_start_pos(viz_3D_publisher, approach_pose_net, goal_pose_net, [], [], pose_tol=0.01)
+        if item_ids[exp_iter] == BOX_ID:
+            approach_pose_net_v2 = np.copy(start_pose_net)
+            approach_pose_net_v2[1] -= 0.15 * World2Net
+            reach_start_pos(viz_3D_publisher, approach_pose_net_v2, goal_pose_net, [], [])
+        elif item_ids[exp_iter] == CAN_ID:
+            approach_pose_net_v2 = np.copy(start_pose_net)
+            approach_pose_net_v2[0] -= 0.2 * World2Net
+            reach_start_pos(viz_3D_publisher, approach_pose_net_v2, goal_pose_net, [], [])
         reach_start_pos(viz_3D_publisher, start_pose_net, goal_pose_net, [], [])
-        # exit()
+
+        # debugging grasp position
+        # reach_start_pos(viz_3D_publisher, approach_pose_net, goal_pose_net, [], [], 
+        #                 pose_tol=0.1, dpose_tol=0.03, reaching_dstep=0.12)
+        # continue
+    
         command_kinova_gripper(gripper_pub, cmd_open=False)
         
         # once object is grabbed, set new mass
         for i in range(3): extra_mass_pub.publish(Float32(extra_mass))
 
         # move back up to approach pose
-        reach_start_pos(viz_3D_publisher, approach_pose_net, goal_pose_net, [], [])
+        reach_start_pos(viz_3D_publisher, approach_pose_net, goal_pose_net, [], [], 
+        pose_tol=0.1, dpose_tol=0.03, reaching_dstep=0.12)
 
         # initialize target pose variables
         local_target_pos_world = np.copy(cur_pos_world)
@@ -425,7 +479,7 @@ if __name__ == "__main__":
 
         prev_pose_world = None
         while (not rospy.is_shutdown() and pose_error > pose_error_tol and 
-                (del_pose_running_avg.avg > del_pose_tol or pose_error > max_pose_error_tol)):
+                (pose_error > max_pose_error_tol)):
             cur_pose_world = np.concatenate([cur_pos_world, cur_ori_quat])
             cur_pos_net = cur_pos_world * World2Net
             cur_pose_net = np.concatenate([cur_pos_net, cur_ori_quat])
@@ -598,12 +652,14 @@ if __name__ == "__main__":
             prev_pose_world = np.copy(cur_pose_world)
             rospy.sleep(0.3)
 
+        dropoff_pose_net = np.copy(goal_pose_net)
+        dropoff_pose_net[0:3] += World2Net * DROP_OFF_OFFSET
+        reach_start_pos(viz_3D_publisher, dropoff_pose_net, goal_pose_net, [], [])
         print(f"Finished! Error {pose_error} vs tol {pose_error_tol}, \nderror {del_pose_running_avg.avg} vs tol {del_pose_tol}")
         print("Opening gripper to release item")
-        rospy.sleep(0.3)
         command_kinova_gripper(gripper_pub, cmd_open=True)  
 
         # Once item released, set extra mass back to 0
         for i in range(3): extra_mass_pub.publish(Float32(0.0))
-        rospy.sleep(0.3)
+        rospy.sleep(0.1)
 
