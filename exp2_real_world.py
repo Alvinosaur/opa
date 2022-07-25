@@ -88,14 +88,14 @@ inspection_ori_quat = np.array([0, 0, 0, 1.0])
 inspection_pos_world_2 = np.array([0.7, -0.3, 0.5])
 inspection_ori_quat_2 = R.from_euler("xyz", [0, 0, -45], degrees=True).as_quat()
 obstacles_pos_world = [
-    np.array([0.484, 0.1, 0.0]),
+    np.array([0.434, 0.1, 0.0]),
     np.array([0.734, -0.3, 0.0]),
 ]
 obstacles_ori_quat = [
     np.array([0,0,0,1.]),
     np.array([0,0,0,1.]),
 ]
-obstacles_radii = np.array([2.0, 1.5])[:, np.newaxis]
+obstacles_radii = np.array([1.5, 1.0])[:, np.newaxis]
 
 # Need more adaptation steps because this example is more difficult
 custom_num_pos_net_updates = 20
@@ -302,7 +302,7 @@ if __name__ == "__main__":
     obj_pos_feats = policy.obj_pos_feats
 
     # # DEBUG LOAD SAVED WEIGHTS
-    # saved_weights = torch.load("exp2_saved_weights_iter_4.pth")
+    # saved_weights = torch.load("exp2_saved_weights_iter_0.pth")
     # policy.update_obj_feats(**saved_weights)
     # print(saved_weights)
 
@@ -474,7 +474,7 @@ if __name__ == "__main__":
                 # Update rotation
                 best_pos_feats, best_rot_feats, best_rot_offsets = (
                     random_seed_adaptation(policy, processed_sample, train_pos=False, train_rot=True, 
-                            is_3D=True, num_objects=num_objects, loss_prop_tol=0.3, 
+                            is_3D=True, num_objects=num_objects, loss_prop_tol=0.1, 
                             pos_feat_max=pos_feat_max, pos_feat_min=pos_feat_min,
                             rot_feat_max=rot_feat_max, rot_feat_min=rot_feat_min,
                             rot_requires_grad=rot_requires_grad))
