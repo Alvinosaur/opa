@@ -46,9 +46,9 @@ CAN_MASS = 0.6
 # Item pickup poses
 start_poses = [
     # boxes
-    np.array([0.2, 0.35, -0.09]),
-    np.array([0.2, 0.48, -0.09]),
-    np.array([0.2, 0.595, -0.11]),
+    np.array([0.2, 0.45, -0.09]),
+    np.array([0.2, 0.58, -0.09]),
+    np.array([0.2, 0.695, -0.09]),
 
     # cans
     np.array([0.333, 0.38, -0.15]),
@@ -142,7 +142,7 @@ if DEBUG:
     dstep = 0.05
     ros_delay = 0.1
 else:
-    dstep = 0.15
+    dstep = 0.1
     ros_delay = 0.4  # NOTE: if modify this, must also modify rolling avg window of dpose
 
 
@@ -213,9 +213,9 @@ def reach_start_pos(viz_3D_publisher, start_pose_net, goal_pose_net, object_pose
             pos_vec = pos_vec * min(pos_mag, reaching_dstep) / pos_mag
             # translation along certain directions involve certain joints which can be larger or smaller
             # apply limits to horizontal movement to prevent 0th joint from rotating too fast
-            print("pos_vec before: ", pos_vec)
+            # print("pos_vec before: ", pos_vec)
             pos_vec = np.clip(pos_vec, a_min=[-0.05, -0.05, -0.1], a_max=[0.05, 0.05, 0.1])
-            print("pos_vec after: ", pos_vec)
+            # print("pos_vec after: ", pos_vec)
             target_pos_world = cur_pos_world + pos_vec
             # target_pos_world = cur_pos_world + np.array([0, -0.1, 0.2])
             dist_to_start_ratio = min(pos_mag / (start_dist  + 1e-5), 1.0)
@@ -256,8 +256,9 @@ def reach_start_pos(viz_3D_publisher, start_pose_net, goal_pose_net, object_pose
                 dEE_pos = np.linalg.norm(cur_pos_world - prev_pos_world)
                 dEE_pos_running_avg.update(dEE_pos)
                 prev_pos_world = np.copy(cur_pos_world)
-                print("Waiting to reach start pos (%s) error: %.3f,  change: %.3f" %
-                      (np.array2string(target_pos_world, precision=2), pose_error, dEE_pos_running_avg.avg))
+                print("Waiting to reach start pos (%s), cur pos (%s) error: %.3f,  change: %.3f" %
+                      (np.array2string(target_pos_world, precision=2), np.array2string(cur_pos_world, precision=2),
+                      pose_error, dEE_pos_running_avg.avg))
             rospy.sleep(ros_delay)
         rospy.sleep(0.5)  # pause to let arm finish converging
 
@@ -443,11 +444,11 @@ if __name__ == "__main__":
         approach_pose_net = np.copy(start_pose_net)
         approach_pose_net[2] += 0.3 * World2Net
         reach_start_pos(viz_3D_publisher, HOME_POSE_NET, goal_pose_net, [], [], 
-                        pose_tol=0.1, dpose_tol=0.03, reaching_dstep=0.1)
+                        pose_tol=0.1, dpose_tol=0.03, reaching_dstep=0.15)
         reach_start_pos(viz_3D_publisher, approach_pose_net, goal_pose_net, [], [], pose_tol=0.01)
         if item_ids[exp_iter] == BOX_ID:
             approach_pose_net_v2 = np.copy(start_pose_net)
-            approach_pose_net_v2[1] -= 0.15 * World2Net
+            approach_pose_net_v2[1] -= 0.2 * World2Net
             reach_start_pos(viz_3D_publisher, approach_pose_net_v2, goal_pose_net, [], [])
         elif item_ids[exp_iter] == CAN_ID:
             approach_pose_net_v2 = np.copy(start_pose_net)
