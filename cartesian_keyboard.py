@@ -4,9 +4,10 @@ from scipy.spatial.transform import Rotation as R
 
 import rospy
 from geometry_msgs.msg import PoseStamped
-from std_msgs.msg import Bool
+from std_msgs.msg import Bool, Float64MultiArray
 
 # Global info updated by callbacks
+cur_joints = None
 cur_pos_world, cur_ori_quat = None, None
 target_pos_world, target_ori_quat = None, None
 is_perturb_pos = True
@@ -43,6 +44,14 @@ def msg_to_pose(msg):
         msg.pose.orientation.w,
     ])
     return pose
+
+def normalize_pi_neg_pi(ang):
+    while ang > np.pi:
+        ang -= 2 * np.pi
+    while ang <= -np.pi:
+        ang += 2 * np.pi
+    return ang
+
 
 def on_press(key):
     """
@@ -110,12 +119,23 @@ def robot_pose_cb(msg):
     cur_pos_world = pose[0:3]
     cur_ori_quat = pose[3:]
 
+
+def robot_joints_cb(msg):
+    global cur_joints
+    cur_joints = np.deg2rad(msg.data)
+    for i in range(len(cur_joints)):
+        cur_joints[i] = normalize_pi_neg_pi(cur_joints[i])
+
+
 if __name__ == "__main__":
     rospy.init_node('cartesian_keyboard')
 
     # Robot EE pose
     rospy.Subscriber('/kinova/pose_tool_in_base_fk',
                      PoseStamped, robot_pose_cb, queue_size=1)
+
+    rospy.Subscriber('/kinova/current_joint_state',
+                     Float64MultiArray, robot_joints_cb, queue_size=1)
 
     # Target pose topic
     pose_pub = rospy.Publisher(
@@ -128,7 +148,7 @@ if __name__ == "__main__":
         on_press=on_press)
     listener.start()
 
-    while cur_pos_world is None:
+    while cur_pos_world is None and cur_joints is None:
         rospy.sleep(0.1)
 
     target_pos_world = np.copy(cur_pos_world)
@@ -146,8 +166,8 @@ if __name__ == "__main__":
         pose_pub.publish(pose_to_msg(target_pose, frame=ROBOT_FRAME))
         
         if it % 3 == 0:
-            print(f"pos: {np.array2string(cur_pos_world, precision=3)}, ori: {np.array2string(cur_ori_quat, precision=3)}", )
-
+            print(f"pos: {np.array2string(cur_pos_world, precision=3, separator=', ')}, ori: {np.array2string(cur_ori_quat, precision=3, separator=', ')}", )
+            print(f"joints: {np.array2string(cur_joints, precision=3, separator=', ')}")
         rospy.sleep(0.3)
         it += 1
 

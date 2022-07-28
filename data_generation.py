@@ -74,7 +74,7 @@ def gen_config(num_objects: int, radius_mu: float, radius_std: float, max_tries=
     else:
         lb = Params.lb_2D
         ub = Params.ub_2D
-        sample_ori_func = lambda: np.random.uniform(low=0, high=2 * np.pi, size=1)
+        def sample_ori_func(): return np.random.uniform(low=0, high=2 * np.pi, size=1)
 
     # sample start, goal pose and radii
     start_ori, goal_ori = sample_ori_func(), sample_ori_func()
@@ -110,7 +110,8 @@ def gen_config(num_objects: int, radius_mu: float, radius_std: float, max_tries=
                 break
 
             # random object radius with a minimum value
-            sampled_radius = max(np.random.normal(loc=radius_mu, scale=radius_std), 0.6 * radius_mu)
+            sampled_radius = max(np.random.normal(
+                loc=radius_mu, scale=radius_std), 0.6 * radius_mu)
 
             # where along the start-goal vector to place the object
             start_goal_prop = np.random.uniform(0.2, 0.8)
@@ -125,7 +126,8 @@ def gen_config(num_objects: int, radius_mu: float, radius_std: float, max_tries=
             # direction of offset from start-goal vector
             if not is_3D:  # 2D
                 # place object on either left or right side of start-goal vector
-                rot_angle = np.random.choice([-np.pi / 2, np.pi / 2])  # (left, right)
+                rot_angle = np.random.choice(
+                    [-np.pi / 2, np.pi / 2])  # (left, right)
                 orth_vec = start_goal_vec @ np.array([
                     [np.cos(rot_angle), -np.sin(rot_angle)],
                     [np.sin(rot_angle), np.cos(rot_angle)]
@@ -153,7 +155,8 @@ def gen_config(num_objects: int, radius_mu: float, radius_std: float, max_tries=
             # Skip if too much overlap with other objects
             if len(objects) > 0:
                 dists = np.linalg.norm(other_objs_pos[:] - obj_pos, axis=-1)
-                intersects = np.where(dists <= 0.8 * (object_radii + sampled_radius))[0]
+                intersects = np.where(
+                    dists <= 0.8 * (object_radii + sampled_radius))[0]
                 if len(intersects) > 0:
                     continue
 
@@ -162,11 +165,13 @@ def gen_config(num_objects: int, radius_mu: float, radius_std: float, max_tries=
 
             # Add object to list
             obj_pose = (obj_pos, obj_ori)
-            objects.append(Object(pos=obj_pos.copy(), radius=sampled_radius, ori=obj_ori.copy()))
+            objects.append(Object(pos=obj_pos.copy(),
+                           radius=sampled_radius, ori=obj_ori.copy()))
             if len(other_objs_pos) == 0:
                 other_objs_pos = obj_pos[np.newaxis]
             else:
-                other_objs_pos = np.vstack([other_objs_pos, obj_pos[np.newaxis]])
+                other_objs_pos = np.vstack(
+                    [other_objs_pos, obj_pos[np.newaxis]])
             object_poses.append(obj_pose)
             object_radii = np.append(object_radii, sampled_radius)
             orth_dists.append(orth_dist)
@@ -207,7 +212,8 @@ def generate_traj_helper(waypoints: np.ndarray, dstep: float):
     gp.fit(wpt_timesteps[:, np.newaxis], waypoints)  # time vs (x,y,z)
 
     # Finely sample points from GP
-    traj_timesteps = np.linspace(wpt_timesteps[1], T, num=num_traj_timesteps - 1)
+    traj_timesteps = np.linspace(
+        wpt_timesteps[1], T, num=num_traj_timesteps - 1)
     traj = gp.predict(traj_timesteps[:, np.newaxis])
     return traj
 
@@ -242,7 +248,8 @@ def fill_ori_transition_2D(start: float, end: float, dtheta: float,
     # Interpolate between start and end
     # NOTE: dtraj includes 0, so overall traj[start_i] = start no change
     dtraj = np.arange(0, num_steps + 1) * dtheta
-    if end < start: dtraj *= -1
+    if end < start:
+        dtraj *= -1
     final_i = start_i + num_steps
     res = start + dtraj
 
@@ -382,7 +389,8 @@ def generate_ori_traj(pos_traj: np.ndarray, start_ori: float,
                                         max_num_steps=phase2_len,
                                         ori_traj=ori_traj)
                 else:
-                    ori_traj[final_i2:final_i2 + phase2_len] = np.flip(ori_traj[first_active:final_i2 + 1])
+                    ori_traj[final_i2:final_i2 +
+                             phase2_len] = np.flip(ori_traj[first_active:final_i2 + 1])
 
             except:
                 # This error happens when object is too close to goal
@@ -390,7 +398,8 @@ def generate_ori_traj(pos_traj: np.ndarray, start_ori: float,
                 # the object's theta takes priority: agent's final theta may not match goal theta in this case
                 cur_ori = ori_traj[final_i2]
                 fill_ori_transition(start=cur_ori, end=goal_ori, dtheta=dtheta,
-                                    start_i=final_i2, max_num_steps=len(ori_traj) - final_i2,
+                                    start_i=final_i2, max_num_steps=len(
+                                        ori_traj) - final_i2,
                                     ori_traj=ori_traj)
 
     # ! Finally move back to goal orientation: only react to goal once close enough
@@ -467,7 +476,8 @@ def generate_trajs(cur_pose: Tuple[np.ndarray, np.ndarray], goal: Tuple[np.ndarr
             if viz:
                 all_pts = np.array([bubble.pos for bubble in eband.bubbles])
                 pos_traj = generate_traj_helper(waypoints=all_pts, dstep=dstep)
-                eband.visualize("Elastic Band Iteration %d" % (t + 1), traj=pos_traj)
+                eband.visualize("Elastic Band Iteration %d" %
+                                (t + 1), traj=pos_traj)
 
         all_pts = np.array([bubble.pos for bubble in eband.bubbles])
         pos_traj = generate_traj_helper(waypoints=all_pts, dstep=dstep)
@@ -532,7 +542,8 @@ def gen_training_sample_expert(object_types: np.ndarray,
                                  goal_radius=goal_radius)  # , viz=True)
 
     # NOTE: use "object_poses", not "objects", because "objects" var is modified by ori offset
-    object_poses = np.vstack([np.hstack(obj_pose) for obj_pose in object_poses])
+    object_poses = np.vstack([np.hstack(obj_pose)
+                             for obj_pose in object_poses])
 
     return dict(states=expert_traj, object_poses=object_poses, object_types=object_types,
                 object_radii=object_radii, goal_radius=goal_radius,
@@ -553,7 +564,8 @@ def gen_batch_samples_debug(is_rot: bool, is_3D: bool):
     # 10 random configurations
     for i in range(10):
         if is_rot:
-            object_types = np.random.choice([Params.IGNORE_ROT_IDX, Params.CARE_ROT_IDX], size=1)
+            object_types = np.random.choice(
+                [Params.IGNORE_ROT_IDX, Params.CARE_ROT_IDX], size=1)
         else:
             num_objects = 2
             # num_objects = 8  # ablation study for scalability with # objects
@@ -597,7 +609,8 @@ def gen_train_test_sample(args: Tuple[int, bool, bool, str]):
         # from multiple objects
         # NOTE: repel_idx == ignore_rot_idx, attract_idx == care_rot_idx
         #   so only need one object type to represent both position and orientation
-        object_types = np.random.choice([Params.IGNORE_ROT_IDX, Params.CARE_ROT_IDX], size=1)
+        object_types = np.random.choice(
+            [Params.IGNORE_ROT_IDX, Params.CARE_ROT_IDX], size=1)
     else:
         # Position data uses an attractor and repulsor object
         object_types = np.array([Params.REPEL_IDX, Params.ATTRACT_IDX])
@@ -617,7 +630,68 @@ def gen_train_test_sample(args: Tuple[int, bool, bool, str]):
     print("Finished %d" % sample_id)
 
 
-def data_collect(data_name: str, is_rot: bool, is_3D: bool, num_trajs=3000):
+def gen_train_test_sample_multi_obj(args: Tuple[int, bool, bool, str, int]):
+    """
+    Generate both a train and test sample, store into file and folder
+    specified by input
+    :param: args(tuple):
+        sample_id: unique index of this sample
+        is_rot: whether to generate orientation-specific data
+        is_3D: whether to generate 2D or 3D data
+        data_folder: path to data folder
+
+    Approaches:
+    - Freeze the learned preferences and just sample random object types, index
+        into the learned object types... We would essentially be freezing the 
+        low-level attract/repel interactions and rather changing the high-level
+        motion as a result of the low  level 
+        - Rather than directly  using attention weighted sum as output, somehow feed into a new high level planner or policy that considers further away objects and should avoid getting stuck in local optima
+
+    - I saw behavior where model gets confused and thinks all objects are repel after repelling from one... seems like 
+
+    - Add new object features to be learned??? doesn't  really  make sense, not taking advantage of the pretraining
+    - 
+
+    :return:
+    """
+    sample_id, is_rot, is_3D, data_folder, num_objs = args
+    # Get data parameters for 2D or 3D scenario
+    if is_3D:
+        object_radii_mu = Params.object_radii_mu_3D
+        object_radii_std = Params.object_radii_std_3D
+    else:
+        object_radii_mu = Params.object_radii_mu_2D
+        object_radii_std = Params.object_radii_std_2D
+
+    if is_rot:
+        # Rotation data only uses one object in a sample to avoid confounding influence
+        # from multiple objects
+        # NOTE: repel_idx == ignore_rot_idx, attract_idx == care_rot_idx
+        #   so only need one object type to represent both position and orientation
+        # TODO: not sure how this would work tbh
+        object_types = np.random.choice(
+            [Params.IGNORE_ROT_IDX, Params.CARE_ROT_IDX], size=1)
+    else:
+        # Position data uses an attractor and repulsor object
+        object_types = np.random.choice(
+            [Params.REPEL_IDX, Params.ATTRACT_IDX], size=num_objs)
+
+    # generate training sample
+    train_sample = gen_training_sample_expert(object_radii_mu=object_radii_mu,
+                                              object_radii_std=object_radii_std,
+                                              object_types=object_types,
+                                              is_rot=is_rot, is_3D=is_3D)
+    np.savez(f"{data_folder}_train/" + "traj_%d" % sample_id, **train_sample)
+
+    test_sample = gen_training_sample_expert(object_radii_mu=object_radii_mu,
+                                             object_radii_std=object_radii_std,
+                                             object_types=object_types,
+                                             is_rot=is_rot, is_3D=is_3D)
+    np.savez(f"{data_folder}_test/" + "traj_%d" % sample_id, **test_sample)
+    print("Finished %d" % sample_id)
+
+
+def data_collect(data_name: str, is_rot: bool, is_3D: bool, num_trajs=3000, num_objs=None):
     """
     Generate training and test data for 2D or 3D scenario and for rotation or position data.
     Spawn multiple processes (configurable, see num_workers) to generate data in parallel.
@@ -634,17 +708,26 @@ def data_collect(data_name: str, is_rot: bool, is_3D: bool, num_trajs=3000):
     os.mkdir(f"{data_folder}_test/")
 
     # Save scripts used for data generation for reference
-    shutil.copy(f"data_generation.py", f"{data_folder}_train/data_generation.py")
+    shutil.copy(f"data_generation.py",
+                f"{data_folder}_train/data_generation.py")
     shutil.copy(f"data_params.py", f"{data_folder}_train/data_params.py")
     shutil.copy(f"elastic_band.py", f"{data_folder}_train/elastic_band.py")
 
     # Spawn pool of tasks(samples to generate) and let processes execute them
-    args = [(i, is_rot, is_3D, data_folder) for i in range(num_trajs)]
-    num_workers = max(1, multiprocessing.cpu_count() - 3)  # save some threads for normal laptop use
+    if num_objs is None:
+        args = [(i, is_rot, is_3D, data_folder) for i in range(num_trajs)]
+        gen_sample_fn = gen_train_test_sample
+    else:
+        args = [(i, is_rot, is_3D, data_folder, num_objs)
+                for i in range(num_trajs)]
+        gen_sample_fn = gen_train_test_sample_multi_obj
+    # save some threads for normal laptop use
+    num_workers = max(1, multiprocessing.cpu_count() - 3)
     with multiprocessing.Pool(num_workers) as p:
-        p.map(gen_train_test_sample, args)
+        p.map(gen_sample_fn, args)
 
-    print(f"Time taken with {num_workers} processes: {time.time() - start_time}s")
+    print(
+        f"Time taken with {num_workers} processes: {time.time() - start_time}s")
 
 
 def visualize_data_2D(data_name: str, use_debug_data=False, num_samples=30, show_rot=False):
@@ -703,13 +786,20 @@ def visualize_data_2D(data_name: str, use_debug_data=False, num_samples=30, show
 
 def parse_arguments():
     parser = argparse.ArgumentParser()
-    parser.add_argument('--data_name', action='store', type=str, help="name for data folder")
+    parser.add_argument('--data_name', action='store',
+                        type=str, help="name for data folder")
     parser.add_argument('--num_samples', action='store', type=int, default=3000,
                         help="how many samples to generate for full dataset")
-    parser.add_argument('--is_rot', action='store_true', help="generate orientation-specific data")
-    parser.add_argument('--visualize', action='store_true', help="visualize data")
-    parser.add_argument('--is_debug', action='store_true', help="visualize/generate debug data")
-    parser.add_argument('--is_3D', action='store_true', help="generate 3D data")
+    parser.add_argument('--is_rot', action='store_true',
+                        help="generate orientation-specific data")
+    parser.add_argument('--visualize', action='store_true',
+                        help="visualize data")
+    parser.add_argument('--is_debug', action='store_true',
+                        help="visualize/generate debug data")
+    parser.add_argument('--is_3D', action='store_true',
+                        help="generate 3D data")
+    parser.add_argument('--num_objs', action='store', type=int, default=None,
+                        help="generate 3D data")
     return parser.parse_args()
 
 
@@ -719,9 +809,11 @@ if __name__ == "__main__":
         os.mkdir(Params.data_root)
 
     if args.visualize:
-        visualize_data_2D(args.data_name, use_debug_data=args.is_debug, num_samples=10)
+        visualize_data_2D(
+            args.data_name, use_debug_data=args.is_debug, num_samples=10)
     elif args.is_debug:
         gen_batch_samples_debug(is_rot=args.is_rot, is_3D=args.is_3D)
     else:
         assert args.data_name, "Need to specify --data_name!"
-        data_collect(args.data_name, is_rot=args.is_rot, is_3D=args.is_3D)
+        data_collect(args.data_name, is_rot=args.is_rot,
+                     is_3D=args.is_3D, num_objs=args.num_objs, num_trajs=args.num_samples)

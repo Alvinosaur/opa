@@ -3,6 +3,7 @@ Copyright (c) 2022 Alvin Shek
 This work is licensed under the terms of the MIT license.
 For a copy, see <https://opensource.org/licenses/MIT>.
 """
+from cmath import isinf
 import os
 import time
 from importlib_metadata import requires
@@ -507,11 +508,11 @@ def model_rollout_wrapper(model, processed_sample, dstep, train_pos, train_rot, 
      all_tgt_ori_tensors, all_tgt_trans_tensors, expert_traj_tensor) = processed_sample
 
     T = start_tensors.shape[0]
-    return model_rollout(goal_tensors=goal_tensors, current_inputs=current_inputs, 
-                          start_tensors=start_tensors, goal_rot_inputs=goal_rot_inputs,
-                          object_inputs=object_inputs, obj_idx_tensors=obj_type_tensors,
-                          model=model, out_T=T-1, goal_pos_radius_scale=goal_pos_radius_scale,
-                          dstep=dstep, train_pos=train_pos, train_rot=train_rot, pos_dim=pos_dim, expert_traj=expert_traj_tensor)
+    return model_rollout(goal_tensors=goal_tensors, current_inputs=current_inputs,
+                         start_tensors=start_tensors, goal_rot_inputs=goal_rot_inputs,
+                         object_inputs=object_inputs, obj_idx_tensors=obj_type_tensors,
+                         model=model, out_T=T - 1, goal_pos_radius_scale=goal_pos_radius_scale,
+                         dstep=dstep, train_pos=train_pos, train_rot=train_rot, pos_dim=pos_dim, expert_traj=expert_traj_tensor)
 
 
 def model_rollout(goal_tensors, current_inputs, start_tensors, goal_rot_inputs,
@@ -540,7 +541,7 @@ def model_rollout(goal_tensors, current_inputs, start_tensors, goal_rot_inputs,
     :param train_rot: whether to train rotation
     :return: predicted trajectory as tensor (B x out_T x pos_dim+ori_dim)
     """
-    if not train_pos: 
+    if not train_pos:
         assert expert_traj is not None
 
     pred_traj = []
@@ -569,7 +570,7 @@ def model_rollout(goal_tensors, current_inputs, start_tensors, goal_rot_inputs,
         if train_pos:
             # NOTE: gradient still flows to earlier timesteps
             current_inputs[:, :pos_dim] = current_inputs[:,
-                                                           :pos_dim] + pred_vec * dstep
+                                                         :pos_dim] + pred_vec * dstep
         else:
             # use human intervention position trajectory
             try:
@@ -727,7 +728,7 @@ def adaptation_loss(model: PolicyNetwork, processed_sample: Tuple,
 
 def perform_adaptation(policy: Policy, processed_sample: Tuple,
                        train_pos: bool, train_rot: bool, is_3D: bool,
-                       n_adapt_iters: int, 
+                       n_adapt_iters: int,
                        verbose=False, clip_params=True):
     """
     Adapts the policy to the batch of human intervention data.
@@ -793,30 +794,47 @@ def perform_adaptation(policy: Policy, processed_sample: Tuple,
 
 
 def random_seed_adaptation(policy: Policy, processed_sample, train_pos, train_rot, is_3D, num_objects,
-                           pos_feat_max, pos_feat_min, 
-                           rot_feat_max, rot_feat_min, 
+                           pos_feat_max, pos_feat_min,
+                           rot_feat_max, rot_feat_min,
                            loss_prop_tol=0.4, clip_params=True,
                            n_adapt_iters=30, max_trials=10,
                            pos_requires_grad=None,
                            rot_requires_grad=None):
-    best_rot_feats, best_rot_offsets = None, None
-    best_pos_feats = None
-
     pos_feats = policy.obj_pos_feats
     rot_feats = policy.obj_rot_feats
     rot_offsets = policy.obj_rot_offsets
     device = pos_feats[0].device
-    best_loss = np.Inf
 
-    gen_rand_pos_feat = lambda : torch.rand(1).to(device) * (pos_feat_max - pos_feat_min) + pos_feat_min
-    gen_rand_rot_feat = lambda : torch.rand(1).to(device) * (rot_feat_max - rot_feat_min) + rot_feat_min
-    gen_rand_rot_offset = lambda : torch.from_numpy(rand_quat()).to(device).to(torch.float32)
+    best_rot_feats, best_rot_offsets = rot_feats, rot_offsets
+    best_pos_feats = pos_feats
+    best_loss = np.Inf
+    found_new_weights = False
+
+    # Calculate initial loss, use to determine if adaptation is even necessary
+    losses, _ = perform_adaptation(policy=policy, processed_sample=processed_sample,
+                                    train_pos=train_pos, train_rot=train_rot,
+                                    n_adapt_iters=0,
+                                    verbose=False, clip_params=clip_params, is_3D=is_3D)
+    init_loss = losses[0]
+    if init_loss < 0.6 and train_pos:
+        print("Already Low Loss, skipping adaptation...")
+        return best_pos_feats, best_rot_feats, best_rot_offsets
+
+    def gen_rand_pos_feat(): return torch.rand(1).to(device) * \
+        (pos_feat_max - pos_feat_min) + pos_feat_min
+
+    def gen_rand_rot_feat(): return torch.rand(1).to(device) * \
+        (rot_feat_max - rot_feat_min) + rot_feat_min
+
+    def gen_rand_rot_offset(): return torch.from_numpy(
+        rand_quat()).to(device).to(torch.float32)
 
     for seed_i in range(max_trials):
         print("Trial {}".format(seed_i))
         if train_pos:
             if pos_requires_grad is None:
-                rand_pos_feat = [gen_rand_pos_feat() for _ in range(num_objects)]
+                rand_pos_feat = [gen_rand_pos_feat()
+                                 for _ in range(num_objects)]
                 for obj_i in range(num_objects):
                     rand_pos_feat[obj_i].requires_grad = True
             else:
@@ -833,8 +851,10 @@ def random_seed_adaptation(policy: Policy, processed_sample, train_pos, train_ro
 
         if train_rot:
             if rot_requires_grad is None:
-                rand_rot_feat = [gen_rand_rot_feat() for _ in range(num_objects)]
-                rand_rot_offset = [gen_rand_rot_offset() for _ in range(num_objects)]
+                rand_rot_feat = [gen_rand_rot_feat()
+                                 for _ in range(num_objects)]
+                rand_rot_offset = [gen_rand_rot_offset()
+                                   for _ in range(num_objects)]
                 for obj_i in range(num_objects):
                     rand_rot_feat[obj_i].requires_grad = True
                     rand_rot_offset[obj_i].requires_grad = True
@@ -854,32 +874,40 @@ def random_seed_adaptation(policy: Policy, processed_sample, train_pos, train_ro
 
                         rand_rot_offset.append(policy.obj_rot_offsets[obj_i])
                         assert rand_rot_offset[-1].requires_grad == False
-            
+
             rot_feats = rand_rot_feat
             rot_offsets = rand_rot_offset
 
         policy.update_obj_feats(pos_feats, rot_feats, rot_offsets)
         losses, _ = perform_adaptation(policy=policy, processed_sample=processed_sample,
-                                        train_pos=train_pos, train_rot=train_rot,
-                                        n_adapt_iters=n_adapt_iters, 
-                                        verbose=False, clip_params=clip_params, is_3D=is_3D)
-        print("loss: %.3f -> %.3f" % (losses[0], losses[-1]))
-        if losses[-1] < best_loss:
+                                       train_pos=train_pos, train_rot=train_rot,
+                                       n_adapt_iters=n_adapt_iters,
+                                       verbose=False, clip_params=clip_params, is_3D=is_3D)
+        print("loss: %.3f -> %.3f vs init: %.3f" % (losses[0], losses[-1], init_loss))
+
+        if losses[-1] < best_loss and losses[-1] < loss_prop_tol * losses[0] and losses[-1] < loss_prop_tol * init_loss:
             best_loss = losses[-1]
             best_pos_feats = pos_feats
             best_rot_feats = rot_feats
             best_rot_offsets = rot_offsets
+            found_new_weights = True
 
-        if losses[-1] < loss_prop_tol * losses[0]: 
+        if losses[-1] < 0.1 * losses[0]:
             break
-    print("best_pos_feats:", best_pos_feats)
-    print("best_rot_feats:", best_rot_feats)
-    print("best_rot_offsets:", [v/v.norm() for v in best_rot_offsets])
 
-    # import ipdb
-    # ipdb.set_trace()
-
+    # no optimization led to sufficient decrease in loss, just keep original weights
+    # useful when no adaptation is even needed (ie: not the focus of the human)
+    # ex: adapting only rotation, position adaptation was not intended
+    if np.isinf(best_loss):
+        policy.update_obj_feats(
+            best_pos_feats, best_rot_feats, best_rot_offsets)
+    if found_new_weights:
+        print("Found New Weights!")
+        print("best_pos_feats:", best_pos_feats)
+        print("best_rot_feats:", best_rot_feats)
+        print("best_rot_offsets:", [v / v.norm() for v in best_rot_offsets])
     return best_pos_feats, best_rot_feats, best_rot_offsets
+
 
 def parse_arguments():
     parser = argparse.ArgumentParser()

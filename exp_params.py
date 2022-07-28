@@ -24,7 +24,7 @@ POS_DIM = 3
 
 # use of 100% goal radius is not necessary for convergence, and reducing the scale
 # allows stronger interactions with nearby objects
-goal_radius_scale = 0.5
+goal_radius_scale = 0.45
 
 # Number of adaptation steps for Position and Rotation Networks
 num_pos_net_updates = 10

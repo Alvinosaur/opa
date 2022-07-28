@@ -193,3 +193,10 @@ def command_kinova_gripper(pub, cmd_open):
     for i in range(5):
         pub.publish(msg)
         rospy.sleep(0.1)
+
+def normalize_pi_neg_pi(ang):
+    while ang > np.pi:
+        ang -= 2 * np.pi
+    while ang <= -np.pi:
+        ang += 2 * np.pi
+    return ang
