@@ -100,10 +100,10 @@ def plot_against_clusters(rot_feats, other_feats, losses, feat_is,
                     xlabel=xlabel, ylabel=ylabel)
 
 
-rot_feat_traj = np.array(rot_feat_traj)
-rot_offset_xyz_traj = np.array(rot_offset_xyz_traj)
-import ipdb
-ipdb.set_trace()
+# rot_feat_traj = np.array(rot_feat_traj)
+# rot_offset_xyz_traj = np.array(rot_offset_xyz_traj)
+# import ipdb
+# ipdb.set_trace()
 
 # Get loss surface data
 # [rot_feat, rot_offset_xyz, true_rot_offset_xyz, rot_diff, rot_loss]
@@ -153,12 +153,12 @@ for rot_feat, rot_offset_quat, loss in opt_traj:
 
 plot_against_clusters(rot_feats, rot_diffs, rot_losses, feat_is,
                       xlabel="Error in rot offset", ylabel="Rot Feats", title="rot_loss_vs_rot_error", show=False)
-T = len(loss_traj)
-ax = plt.gca()
-for t in range(T):
-    ax.plot(rot_error_traj, rot_feat_traj, loss_traj, 'o', alpha=0.9,
-            color=cm.jet(t / T))
-plt.show()
+# T = len(loss_traj)
+# ax = plt.gca()
+# for t in range(T):
+#     ax.plot(rot_error_traj, rot_feat_traj, loss_traj, 'o', alpha=0.9,
+#             color=cm.jet(t / T))
+# plt.show()
 
 # plot loss surface over rot_feat vs rot_offset_x - true_rot_offset_x
 offset_diffs = true_offsets_xyz - pred_offsets_xyz
