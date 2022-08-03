@@ -150,6 +150,7 @@ if __name__ == "__main__":
 
     while cur_pos_world is None and cur_joints is None:
         rospy.sleep(0.1)
+    print(cur_joints)
 
     target_pos_world = np.copy(cur_pos_world)
     target_ori_quat = np.copy(cur_ori_quat)

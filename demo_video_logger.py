@@ -52,7 +52,7 @@ if __name__ == "__main__":
 
     frame_height = 540
     frame_width = 960
-    exp_name = "trial7"
+    exp_name = "trial8"
     out_root = "/home/ruic/Documents/opa/hardware_demo_videos"
     out_path = os.path.join(out_root, exp_name)
     video_path = os.path.join(out_path, "video")

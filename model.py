@@ -529,7 +529,7 @@ class PolicyNetwork(nn.Module):
         return predicted_pos_vec, pos_effects
 
     def forward(self, current, start, goal, goal_rot, objects, object_indices, is_training,
-                calc_pos=True, calc_rot=True):
+                calc_pos=True, calc_rot=True, objects_rot=None):
         """
         Forward pass of policy.
             1. Calculate size-relative distances between each object/start/goal and the agent
@@ -559,10 +559,17 @@ class PolicyNetwork(nn.Module):
         assert goal_rot.shape[-1] == self.pos_dim + self.rot_dim + 1
         assert objects.shape[-1] == self.pos_dim + self.rot_dim + 1
 
+        if objects_rot is None:
+            objects_rot = objects
+
         # Compute size-relative distances between each object/start/goal and the agent
         obj_dist_ratios = calc_dist_ratio(x1=objects[:, :, self.pos_idxs],
                                           x2=current[:, :, self.pos_idxs],
                                           r1=objects[:, :, self.radius_idx],
+                                          r2=current[:, :, self.radius_idx])
+        obj_rot_dist_ratios = calc_dist_ratio(x1=objects_rot[:, :, self.pos_idxs],
+                                          x2=current[:, :, self.pos_idxs],
+                                          r1=objects_rot[:, :, self.radius_idx],
                                           r2=current[:, :, self.radius_idx])
         goal_dist_ratios = calc_dist_ratio(x1=goal[:, :, self.pos_idxs],
                                            x2=current[:, :, self.pos_idxs],
@@ -590,9 +597,9 @@ class PolicyNetwork(nn.Module):
 
         if calc_rot:
             pos_dist_ratios = torch.cat(
-                [obj_dist_ratios, start_dist_ratios, goal_rot_dist_ratios], dim=1)
+                [obj_rot_dist_ratios, start_dist_ratios, goal_rot_dist_ratios], dim=1)
             predicted_rot_vec = self.calc_rot_vec(
-                start, goal_rot, objects, object_indices, pos_dist_ratios, is_training)
+                start, goal_rot, objects_rot, object_indices, pos_dist_ratios, is_training)
 
         return predicted_pos_vec, predicted_rot_vec, pos_effects
 

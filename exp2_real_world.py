@@ -31,10 +31,11 @@ from data_generation import rand_quat
 
 World2Net = 10.0
 Net2World = 1 / World2Net
-num_objects = 1 + 2  # + 2 for obstacles added later
+num_objects = 1 + 1  # + 2 for obstacles added later
 ee_min_pos_world = np.array([0.23, -0.475, -0.1])
 ee_max_pos_world = np.array([0.725, 0.55, 0.35])
 inspection_radii = np.array([5.0])[:, np.newaxis]  # defined on net scale
+inspection_rot_radii = np.array([4.0])[:, np.newaxis]
 goal_rot_radius = np.array([4.0])
 # start_pos_world = np.array([0.4, 0.525, -0.1])
 start_pos_world = None
@@ -121,9 +122,9 @@ extra_masses = [
 
 # start_ori_quat = np.array([-0.75432945, -0.00351821, -0.64973774,
 #  -0.09389131])
-inspection_pos_world = np.array([0.7, 0.1, -0.07])
+inspection_pos_world = np.array([0.7, 0.1, 0.1])
 inspection_ori_quat = R.from_euler(
-    "zyx", [0, 15, 0], degrees=True).as_quat()
+    "zyx", [0, 30, 0], degrees=True).as_quat()
 
 inspection_pos_world_2 = np.array([0.7, -0.2, 0.5])
 
@@ -133,13 +134,16 @@ inspection_ori_quat_2 = R.from_euler(
 
 obstacles_pos_world = [
     np.array([0.38, 0.1, 0.0]),
-    np.array([0.734, -0.3, 0.0]),
+    # np.array([0.734, -0.3, 0.0]),
 ]
 obstacles_ori_quat = [
     np.array([0, 0, 0, 1.]),
-    np.array([0, 0, 0, 1.]),
+    # np.array([0, 0, 0, 1.]),
 ]
-obstacles_radii = np.array([1.5, 1.0])[:, np.newaxis]
+obstacles_radii = np.array([
+    1.5, 
+    # 1.0
+    ])[:, np.newaxis]
 
 # Need more adaptation steps because this example is more difficult
 custom_num_pos_net_updates = 20
@@ -152,7 +156,7 @@ perturb_pose_traj_world = []
 is_intervene = False
 need_update = False
 
-DEBUG = False
+DEBUG = True
 if DEBUG:
     dstep = 0.05
     ros_delay = 0.1
@@ -388,6 +392,9 @@ if __name__ == "__main__":
         on_press=is_intervene_cb)
     listener.start()
 
+    # Simulate policy's behavior in perfect scenario with no physical constraints in motion
+    saved_trial_folder = "hardware_demo_videos/trial7"
+    
     # create folder to store user results
     user_dir = os.path.join("user_trials", args.user, "exp_real_world")
     os.makedirs(user_dir, exist_ok=True)
@@ -442,8 +449,8 @@ if __name__ == "__main__":
     obj_pos_feats = policy.obj_pos_feats
 
     # # DEBUG LOAD SAVED WEIGHTS
-    # saved_weights = torch.load("exp2_saved_weights_iter_4.pth")
-    # policy.update_obj_feats(**saved_weights)
+    saved_weights = torch.load("hardware_demo_videos/trial7/exp2_saved_weights_iter_1.pth")
+    policy.update_obj_feats(**saved_weights)
     # print(saved_weights)
 
     # Convert np arrays to torch tensors for model input
@@ -457,8 +464,12 @@ if __name__ == "__main__":
         torch.float32).to(DEVICE).view(-1, 1)
     inspection_radii_torch = torch.from_numpy(inspection_radii).to(
         torch.float32).to(DEVICE).view(-1, 1)
+    inspection_rot_radii_torch = torch.from_numpy(inspection_rot_radii).to(
+        torch.float32).to(DEVICE).view(-1, 1)
     object_radii_torch = torch.vstack(
         [inspection_radii_torch, obstacles_radii_torch])
+    object_rot_radii_torch = torch.vstack(
+        [inspection_rot_radii_torch, obstacles_radii_torch])
     object_radii = np.vstack([inspection_radii, obstacles_radii])
 
     # Optionally view with ROS Rviz
@@ -526,14 +537,12 @@ if __name__ == "__main__":
             [goal_pos_world * World2Net, goal_ori_quat])
         goal_pose_world = np.concatenate([goal_pos_world, goal_ori_quat])
 
-        print(policy.obj_pos_feats)
-        print(policy.obj_rot_feats)
         if exp_iter == num_exps - 1:
             inspection_pos_world = inspection_pos_world_2
             inspection_ori_quat = inspection_ori_quat_2
-            print("SETTING NEW HUMAN POSE!")
-            saved_weights = torch.load("exp2_saved_weights_iter_4.pth")
-            policy.update_obj_feats(**saved_weights)
+            # TODO: remove this... 
+            # saved_weights = torch.load("exp2_saved_weights_iter_4.pth")
+            # policy.update_obj_feats(**saved_weights)
 
         inspection_pos_net = World2Net * inspection_pos_world
         inspection_pose_net = np.concatenate(
@@ -552,6 +561,8 @@ if __name__ == "__main__":
             [inspection_pose_tensor, obstacles_poses_tensor], dim=0)
         objects_torch = torch.cat(
             [objects_tensor, object_radii_torch], dim=-1).unsqueeze(0)
+        objects_rot_torch = torch.cat(
+            [objects_tensor, object_rot_radii_torch], dim=-1).unsqueeze(0)
 
         # reach initial pose
         # NOTE: this works, but we choose to reset to exact joints to avoid arm
@@ -568,6 +579,7 @@ if __name__ == "__main__":
 
         # exit()
 
+        ########################################
         approach_pose_net = np.copy(start_pose_net)
         approach_pose_net[2] += 0.2 * World2Net
         reach_start_pos(viz_3D_publisher, approach_pose_net,
@@ -602,12 +614,21 @@ if __name__ == "__main__":
             approach_pose_net[0] -= 0.1 * World2Net
         reach_start_pos(viz_3D_publisher, approach_pose_net,
                         goal_pose_net, [], [])
-        
+        #########################################
+
+        # debug why robot could not achieve desired pose
+        # perturb_traj_iter_4_world = np.load(os.path.join(saved_trial_folder, "perturb_traj_iter_4.npy"))
+        # new_target = np.concatenate([World2Net * perturb_traj_iter_4_world[-1][0:3], perturb_traj_iter_4_world[-1][3:]])
+
+        # # set current pose to be the final perturbation trajectory pose
+        # reach_start_pos(viz_3D_publisher, new_target,
+        #                 goal_pose_net, [], [])
 
         # initialize target pose variables
         local_target_pos_world = np.copy(cur_pos_world)
         local_target_ori = np.copy(cur_ori_quat)
 
+        intervene_count = 0
         pose_error = 1e10
         del_pose = 1e10
         del_pose_running_avg = RunningAverage(length=5, init_vals=1e10)
@@ -668,17 +689,19 @@ if __name__ == "__main__":
                         "obj_rot_feats": policy.obj_rot_feats,
                         "obj_rot_offsets": policy.obj_rot_offsets
                     },
-                    f"exp2_pre_adaptation_saved_weights_iter_{exp_iter}.pth"
+                    f"exp2_pre_adaptation_saved_weights_iter_{exp_iter}_num_{intervene_count}.pth"
                 )
 
                 # Update position
+                print("Position:")
                 random_seed_adaptation(policy, processed_sample, train_pos=True, train_rot=False,
-                                       is_3D=True, num_objects=num_objects, loss_prop_tol=0.6,
+                                       is_3D=True, num_objects=num_objects, loss_prop_tol=0.8,
                                        pos_feat_max=pos_feat_max, pos_feat_min=pos_feat_min,
                                        rot_feat_max=rot_feat_max, rot_feat_min=rot_feat_min,
                                        pos_requires_grad=pos_requires_grad)
 
                 # Update rotation
+                print("Rotation:")
                 best_pos_feats, best_rot_feats, best_rot_offsets = (
                     random_seed_adaptation(policy, processed_sample, train_pos=False, train_rot=True,
                                            is_3D=True, num_objects=num_objects, loss_prop_tol=0.2,
@@ -692,15 +715,18 @@ if __name__ == "__main__":
                         "obj_rot_feats": best_rot_feats,
                         "obj_rot_offsets": best_rot_offsets
                     },
-                    f"exp2_saved_weights_iter_{exp_iter}.pth"
+                    f"exp2_saved_weights_iter_{exp_iter}_num_{intervene_count}.pth"
                 )
-                np.save(f"perturb_traj_iter_{exp_iter}", 
+                np.save(f"perturb_traj_iter_{exp_iter}_num_{intervene_count}", 
                         perturb_pose_traj_world)
 
                 # reset the intervention data
                 perturb_pose_traj_world = []
                 need_update = False
                 override_pred_delay = True
+
+                # increment intervention count to avoid overwriting this intervention's data
+                intervene_count += 1
 
                 # reach back to the pose before p
                 continue
@@ -738,6 +764,7 @@ if __name__ == "__main__":
                                                                start=start_rot_objects,
                                                                goal=goal_objects, goal_rot=goal_rot_objects,
                                                                objects=objects_torch,
+                                                               objects_rot=objects_rot_torch,
                                                                object_indices=object_idxs_tensor,
                                                                calc_rot=calc_rot,
                                                                calc_pos=calc_pos)
@@ -780,7 +807,7 @@ if __name__ == "__main__":
 
             # Apply low-pass filter to smooth out policy's sudden changes in orientation
             interp_rot = interpolate_rotations(
-                start_quat=cur_ori_quat, stop_quat=local_target_ori, alpha=1.0)
+                start_quat=cur_ori_quat, stop_quat=local_target_ori, alpha=0.7)
 
             # Clip target EE position to bounds
             local_target_pos_world = np.clip(
@@ -788,6 +815,10 @@ if __name__ == "__main__":
 
             # Publish is_intervene
             is_intervene_pub.publish(Bool(is_intervene))
+
+            # import ipdb
+            # ipdb.set_trace()
+
             # Publish target pose
             if not DEBUG:
                 target_pose = np.concatenate(

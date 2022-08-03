@@ -800,6 +800,9 @@ def random_seed_adaptation(policy: Policy, processed_sample, train_pos, train_ro
                            n_adapt_iters=30, max_trials=10,
                            pos_requires_grad=None,
                            rot_requires_grad=None):
+
+    start_time = time.time()
+
     pos_feats = policy.obj_pos_feats
     rot_feats = policy.obj_rot_feats
     rot_offsets = policy.obj_rot_offsets
@@ -906,6 +909,10 @@ def random_seed_adaptation(policy: Policy, processed_sample, train_pos, train_ro
         print("best_pos_feats:", best_pos_feats)
         print("best_rot_feats:", best_rot_feats)
         print("best_rot_offsets:", [v / v.norm() for v in best_rot_offsets])
+
+    end_time = time.time()
+    print("Time taken for adaptation: %.3fs" % (end_time - start_time))
+
     return best_pos_feats, best_rot_feats, best_rot_offsets
 
 
