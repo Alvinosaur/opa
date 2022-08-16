@@ -77,12 +77,6 @@ def inv_transform(g):
 
 class KinovaRobot(object):
     def __init__(self):
-        # define joint transformations in zero configuration wrt base frame
-        self.g0 = np.zeros((4, 4))
-        self.g0[:3, :3] = np.eye(3)
-        self.g0[:3, 3] = np.array([0.0, -0.0246, 1.3073])
-        self.g0[-1, -1] = 1
-
         # define axis of rotations
         self.w1 = np.array([0, 0, -1])[:, np.newaxis]
         self.w2 = np.array([0, 1, 0])[:, np.newaxis]
@@ -103,6 +97,42 @@ class KinovaRobot(object):
         self.l6 = 0.1059
         self.l7 = 0.1059
         self.l8 = 0.0615 + 0.12  # 0.12 for gripper center
+
+        # Zero configuration transforms to joints and EE
+        self.joint_g0s = []
+        g0 = np.eye(4)
+        
+        # Joint 1
+        g0[:3, 3] = [0, 0, self.l1]
+        self.joint_g0s.append(g0.copy())
+
+        # Joint 2
+        g0[:3, 3] = [0, -0.0054, self.l1 + self.l2]
+        self.joint_g0s.append(g0.copy())
+
+        # Joint 3
+        g0[:3, 3] = [0, -0.0118, self.l1 + self.l2 + self.l3]
+        self.joint_g0s.append(g0.copy())
+
+        # Joint 4
+        g0[:3, 3] = [0, -0.0182, self.l1 + self.l2 + self.l3 + self.l4]
+        self.joint_g0s.append(g0.copy())
+
+        # Joint 5
+        g0[:3, 3] = [0, -0.0246, self.l1 + self.l2 + self.l3 + self.l4 + self.l5]
+        self.joint_g0s.append(g0.copy())
+
+        # Joint 6
+        g0[:3, 3] = [0, -0.0246, self.l1 + self.l2 + self.l3 + self.l4 + self.l5 + self.l6]
+        self.joint_g0s.append(g0.copy())
+
+        # Joint 7
+        g0[:3, 3] = [0, -0.0246, self.l1 + self.l2 + self.l3 + self.l4 + self.l5 + self.l6 + self.l7]
+        self.joint_g0s.append(g0.copy())
+
+        # EE
+        g0[:3, 3] = [0, -0.0246, self.l1 + self.l2 + self.l3 + self.l4 + self.l5 + self.l6 + self.l7 + self.l8]
+        self.ee_g0 = g0.copy()
 
         # define joint origins
         # NOTE: the joint origins are defined in the base frame
@@ -154,7 +184,9 @@ class KinovaRobot(object):
 
         joint_transforms = [twist_transform(
             thetas[i], self.ws[i], self.qs[i]) for i in range(7)]
-        return reduce((lambda x, y: x @ y), joint_transforms) @ self.g0
+        ee_pose = reduce((lambda x, y: x @ y), joint_transforms) @ self.ee_g0
+        joint_transforms = [g0 @ M for (g0, M) in zip(self.joint_g0s, joint_transforms)]
+        return joint_transforms, ee_pose
 
     def calc_jacobian(self, thetas):
         joint_transforms = [twist_transform(
@@ -168,11 +200,11 @@ class KinovaRobot(object):
         # for i in range(7):
         #     lhs = reduce((lambda x, y: x @ y), joint_transforms[0:i], np.eye(4))
         #     rhs = reduce((lambda x, y: x @ y), joint_transforms[i:], np.eye(4))
-        #     jacobian[:, i] = v_operator(lhs @ hat_operator(self.twists[i]) @ rhs @ self.g0)
+        #     jacobian[:, i] = v_operator(lhs @ hat_operator(self.twists[i]) @ rhs @ self.ee_g0)
 
         # Spatial Jacobian
 
-        # gst = reduce((lambda x, y: x @ y), joint_transforms) @ self.g0
+        # gst = reduce((lambda x, y: x @ y), joint_transforms) @ self.ee_g0
         # g = np.eye(4)
         # for i in range(7):
         #     twist = self.twists[i]
@@ -182,10 +214,10 @@ class KinovaRobot(object):
         #     g = g @ joint_transforms[i]
         #     jacobian[:, i] = twist.flatten()
 
-        # print(g @ self.g0)
+        # print(g @ self.ee_g0)
 
         # Body Jacobian
-        g = self.g0
+        g = self.ee_g0
         for i in range(6, -1, -1):
             twist = self.twists[i]
             g = joint_transforms[i] @ g
@@ -286,7 +318,7 @@ class KinovaRobot(object):
             thetas = thetas + alpha * delta_joints
 
             # update current state
-            EE_pose_mat = self.fk(thetas)
+            _, EE_pose_mat = self.fk(thetas)
             EE_pos = EE_pose_mat[:3, 3]
             EE_quat = R.from_matrix(EE_pose_mat[:3, :3]).as_quat()
             xs = np.concatenate([EE_pos, EE_quat])
@@ -300,19 +332,24 @@ def test():
     # Zero Configuration
     q = np.zeros(7)
     print("Zero Configuration: ")
-    print(robot.fk(q))
+    zero_config_joints, zero_config_ee = robot.fk(q)
+    print("Joint poses:")
+    for i, M in enumerate(zero_config_joints): 
+        print(f"J{i}", M)
+    
+    print("EE: ", zero_config_ee)
 
     for i in range(7):
         q[i] = np.pi / 2
-        ee_pose_mat = robot.fk(q)
+        joint_poses, ee_pose_mat = robot.fk(q)
         ee_pos = ee_pose_mat[:3, 3]
         ee_rot_quat = R.from_matrix(ee_pose_mat[:3, :3]).as_quat()
-        print("Joint {}: {}, pos: {} rot: {}".format(
+        print("Joint {}: {}, EE pos: {} EE rot: {}".format(
             i, q[i], np.array2string(ee_pos, precision=3), np.array2string(ee_rot_quat, precision=3)))
         q[i] = 0
 
     q = np.array([0, np.pi/4, np.pi, -np.pi/4, 0, 3*np.pi/2, np.pi/2])
-    ee_pose_mat = robot.fk(q)
+    _, ee_pose_mat = robot.fk(q)
     ee_ori_euler_xyz = R.from_matrix(ee_pose_mat[:3, :3]).as_euler("xyz")
     print(ee_pose_mat[:3, 3])
     print(np.rad2deg(ee_ori_euler_xyz))

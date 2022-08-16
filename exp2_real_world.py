@@ -47,7 +47,7 @@ joints_lb = np.array([-np.pi, -2.250, -np.pi, -2.580, -np.pi, -2.0943, -np.pi])
 joints_ub = -1 * joints_lb
 joints_avoid_wraparound = [False, True, False, True, False, True, False]
 BOX_MASS = 0.3
-CAN_MASS = 0.6
+CAN_MASS = 1.0
 
 # Item pickup poses
 start_poses = [
@@ -101,7 +101,7 @@ goal_poses = [
     np.array([0.4, -0.6, 0.15]),
     np.array([0.4, -0.58, 0.15]),
     np.array([0.4, -0.575, 0.15]),
-    np.array([0.4, -0.56, 0.15]),
+    np.array([0.4, -0.56, 0.25]),
 ]
 DROP_OFF_OFFSET = np.array([0.0, 0.0, -0.1])
 goal_ori_quats = start_ori_quats
@@ -122,15 +122,15 @@ extra_masses = [
 
 # start_ori_quat = np.array([-0.75432945, -0.00351821, -0.64973774,
 #  -0.09389131])
-inspection_pos_world = np.array([0.7, 0.1, 0.1])
+inspection_pos_world = np.array([0.7, 0.1, 0.05])
 inspection_ori_quat = R.from_euler(
     "zyx", [0, 30, 0], degrees=True).as_quat()
 
-inspection_pos_world_2 = np.array([0.7, -0.2, 0.5])
+inspection_pos_world_2 = np.array([0.6, -0.2, 0.4])
 
 # TODO: THIS NEEDS SLIGHT CHANGE, CAN NOT SHOWN CORRECTLY
 inspection_ori_quat_2 = R.from_euler(
-    "zyx", [-30, -30, 0], degrees=True).as_quat()
+    "zyx", [-20, -20, 0], degrees=True).as_quat()
 
 obstacles_pos_world = [
     np.array([0.38, 0.1, 0.0]),
@@ -156,7 +156,7 @@ perturb_pose_traj_world = []
 is_intervene = False
 need_update = False
 
-DEBUG = True
+DEBUG = False
 if DEBUG:
     dstep = 0.05
     ros_delay = 0.1
@@ -393,7 +393,7 @@ if __name__ == "__main__":
     listener.start()
 
     # Simulate policy's behavior in perfect scenario with no physical constraints in motion
-    saved_trial_folder = "hardware_demo_videos/trial7"
+    saved_trial_folder = "hardware_demo_videos/trial8"
     
     # create folder to store user results
     user_dir = os.path.join("user_trials", args.user, "exp_real_world")
@@ -449,8 +449,8 @@ if __name__ == "__main__":
     obj_pos_feats = policy.obj_pos_feats
 
     # # DEBUG LOAD SAVED WEIGHTS
-    saved_weights = torch.load("hardware_demo_videos/trial7/exp2_saved_weights_iter_1.pth")
-    policy.update_obj_feats(**saved_weights)
+    # saved_weights = torch.load("hardware_demo_videos/trial9/exp2_saved_weights_iter_1_num_1.pth")
+    # policy.update_obj_feats(**saved_weights)
     # print(saved_weights)
 
     # Convert np arrays to torch tensors for model input
@@ -540,9 +540,6 @@ if __name__ == "__main__":
         if exp_iter == num_exps - 1:
             inspection_pos_world = inspection_pos_world_2
             inspection_ori_quat = inspection_ori_quat_2
-            # TODO: remove this... 
-            # saved_weights = torch.load("exp2_saved_weights_iter_4.pth")
-            # policy.update_obj_feats(**saved_weights)
 
         inspection_pos_net = World2Net * inspection_pos_world
         inspection_pose_net = np.concatenate(
@@ -694,7 +691,13 @@ if __name__ == "__main__":
 
                 # Update position
                 print("Position:")
-                random_seed_adaptation(policy, processed_sample, train_pos=True, train_rot=False,
+                dist_perturbed = np.linalg.norm(
+                    perturb_pos_traj_world_interp[0] - perturb_pos_traj_world_interp[-1])
+                if dist_perturbed < 0.1:
+                    print(
+                        "No major position perturbation, skipping position adaptation...")
+                else:
+                    random_seed_adaptation(policy, processed_sample, train_pos=True, train_rot=False,
                                        is_3D=True, num_objects=num_objects, loss_prop_tol=0.8,
                                        pos_feat_max=pos_feat_max, pos_feat_min=pos_feat_min,
                                        rot_feat_max=rot_feat_max, rot_feat_min=rot_feat_min,
@@ -852,7 +855,7 @@ if __name__ == "__main__":
         np.save(f"is_intervene_traj{exp_iter}.npy", is_intervene_traj)
 
         dropoff_pose_net = np.copy(goal_pose_net)
-        dropoff_pose_net[0:3] += World2Net * DROP_OFF_OFFSET
+        dropoff_pose_net[2] = World2Net * 0.05
         reach_start_pos(viz_3D_publisher, dropoff_pose_net,
                         goal_pose_net, [], [], pose_tol=0.07)
         print(
