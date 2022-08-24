@@ -24,6 +24,14 @@ from std_msgs.msg import Bool
 
 ROBOT_FRAME = "kinova_base"
 
+# Item ID's (if item == can, slide into grasp pose horizontally)
+BOX_ID = 0
+CAN_ID = 1
+
+# Item masses
+BOX_MASS = 0.3
+CAN_MASS = 1.0
+
 
 class RunningAverage(object):
     def __init__(self, length, init_vals) -> None:
@@ -37,11 +45,14 @@ class RunningAverage(object):
         self.count += 1
         self.avg = sum(self.values) / min(self.count, self.length)
 
+
 def sigint_handler(signal, frame):
     # Force scripts to exit cleanly
     exit()
 
-# Taken from meta cobot 
+# Taken from meta cobot
+
+
 def ParseCameraExtrinsics(in_path, serial, name):
     '''
     translation xyz: -0.218569 0.208541 0.794479
@@ -70,11 +81,14 @@ def ParseCameraExtrinsics(in_path, serial, name):
 
     return mat
 
-# Taken from meta cobot 
+# Taken from meta cobot
+
+
 def ComposeAffine(trans, quat, Z=np.ones(3)):
     rot_mat = R.from_quat(quat).as_matrix()
     M = aff.compose(trans, rot_mat, Z)
     return M
+
 
 def pose_to_msg(pose: np.ndarray, frame) -> PoseStamped:
     """
@@ -95,6 +109,7 @@ def pose_to_msg(pose: np.ndarray, frame) -> PoseStamped:
     msg.pose.orientation.w = pose[6]
 
     return msg
+
 
 def msg_to_pose(msg):
     pose = np.array([
@@ -158,7 +173,8 @@ def plan_step(robot: int, tool_link: int, target_pose: Pose, obstacles: list,
     # plan_direct_joint_motion(robot idx, joint idxs, Pose, [obs], limits)
     current_conf.assign()
     path = plan_direct_joint_motion(robot, current_conf.joints, q_approach, obstacles=obstacles,
-                                    custom_limits=custom_limits, attachments=[grasp.attachment()],
+                                    custom_limits=custom_limits, attachments=[
+                                        grasp.attachment()],
                                     disabled_collisions={grasp.body})
     if path is None:
         raise Exception("Joint Path Failed!")
@@ -180,19 +196,21 @@ def load_floor():
 
     return floor_ids
 
+
 def calc_pose_error(pose_quat1, pose_quat2, pos_scale=1, rot_scale=0.1):
     pose_quat1 = pose_quat1.flatten()
     pose_quat2 = pose_quat2.flatten()
     pos_error = np.linalg.norm(pose_quat1[0:3] - pose_quat2[0:3])
-    rot_error = np.arccos(np.abs(pose_quat1[3:] @ pose_quat2[3:]))
+    try:
+        rot_error = np.arccos(
+            np.clip(-1, 1, np.abs(pose_quat1[3:] @ pose_quat2[3:]))
+        )
+    except:
+        print("ERROR CALCULATING ROT ERROR")
+        rot_error = 0.0
     pose_error = pos_scale * pos_error + rot_scale * rot_error
     return pose_error
 
-def command_kinova_gripper(pub, cmd_open):
-    msg = Bool(cmd_open)
-    for i in range(5):
-        pub.publish(msg)
-        rospy.sleep(0.1)
 
 def normalize_pi_neg_pi(ang):
     while ang > np.pi:
@@ -200,3 +218,24 @@ def normalize_pi_neg_pi(ang):
     while ang <= -np.pi:
         ang += 2 * np.pi
     return ang
+
+
+def perform_grasp(grasp_pose_quat, item_id, kinova_interface):
+    approach_pose = np.copy(grasp_pose_quat)
+    approach_pose[2] += 0.2
+    kinova_interface.reach_pose(approach_pose)
+
+    if item_id == BOX_ID:
+        approach_pose_v2 = np.copy(grasp_pose_quat)
+        approach_pose_v2[1] -= 0.1
+        kinova_interface.reach_pose(approach_pose_v2)
+    elif item_id == CAN_ID:
+        approach_pose_v2 = np.copy(grasp_pose_quat)
+        approach_pose_v2[0] -= 0.1
+        approach_pose_v2[1] -= 0.03
+        kinova_interface.reach_pose(approach_pose_v2)
+    else:
+        raise Exception("Unknown item id: %d, expected %d or %d" % (
+            item_id, BOX_ID, CAN_ID
+        ))
+    kinova_interface.reach_start_pos(grasp_pose_quat)
